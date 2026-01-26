@@ -1,0 +1,113 @@
+{
+  "overview": "Grade jobs A-F based on fit with skills, experience, and preferences. Higher grades indicate better fit and higher likelihood of success.",
+
+  "grades": {
+    "A": {
+      "description": "Excellent fit - Should definitely apply",
+      "criteria": [
+        "Job requirements match 80%+ of core skills",
+        "Budget/rate is at or above preferred rate ($60+/hr or equivalent)",
+        "Project scope is clear and well-defined",
+        "Duration aligns with availability",
+        "Client has good history (payment verified, positive reviews)",
+        "Technology stack is familiar and enjoyable to work with",
+        "Project type matches past successful projects"
+      ]
+    },
+    "B": {
+      "description": "Good fit - Worth applying with some considerations",
+      "criteria": [
+        "Job requirements match 60-80% of core skills",
+        "Budget is reasonable ($45-60/hr range or equivalent)",
+        "Minor skill gaps that can be quickly learned",
+        "Project scope is mostly clear with some ambiguity",
+        "Client history is decent or new client with good communication",
+        "Interesting project that could expand skills"
+      ]
+    },
+    "C": {
+      "description": "Moderate fit - Consider if slow period or interesting project",
+      "criteria": [
+        "Job requirements match 40-60% of core skills",
+        "Budget is below preferred but acceptable ($35-45/hr)",
+        "Some skill gaps that require learning",
+        "Project scope has some red flags or vagueness",
+        "Client has limited or mixed history",
+        "Project type is outside comfort zone but doable"
+      ]
+    },
+    "D": {
+      "description": "Poor fit - Only apply if desperate or strategically valuable",
+      "criteria": [
+        "Job requirements match less than 40% of core skills",
+        "Budget is significantly below market rate",
+        "Major skill gaps requiring substantial learning",
+        "Project scope is unclear or unrealistic",
+        "Client has red flags (new with unrealistic expectations, poor reviews)",
+        "High risk of scope creep or difficult client relationship"
+      ]
+    },
+    "F": {
+      "description": "Not a fit - Do not apply",
+      "criteria": [
+        "Job requirements don't match skills at all",
+        "Budget is unacceptably low",
+        "Project is outside expertise with no interest in learning",
+        "Clear red flags (asking for free work, unrealistic timeline)",
+        "Client has poor payment history or negative reviews",
+        "Project involves technologies or domains to avoid"
+      ]
+    }
+  },
+
+  "positive_signals": [
+    "Payment method verified",
+    "Previous Upwork hire history",
+    "Clear, detailed job description",
+    "Realistic timeline expectations",
+    "Budget range provided upfront",
+    "Professional communication style",
+    "Company/client information provided",
+    "Specific technical requirements listed",
+    "Mentions code reviews or quality standards"
+  ],
+
+  "red_flags": [
+    "No payment method verified",
+    "Extremely low budget for scope",
+    "Vague or unrealistic requirements",
+    "\"Quick and easy\" for complex work",
+    "Asking for free samples or unpaid tests",
+    "No budget range provided",
+    "Multiple failed hires on this job",
+    "Poor client reviews",
+    "Scope creep indicators (\"and other tasks as needed\")",
+    "Unrealistic timeline (\"need it tomorrow\")"
+  ],
+
+  "preferred_project_types": [
+    "Backend API development",
+    "Full-stack web applications",
+    "Data pipeline and ETL projects",
+    "System integrations",
+    "MVP development for startups",
+    "Django/Python projects",
+    "React frontend projects"
+  ],
+
+  "avoid_project_types": [
+    "Mobile app development (iOS/Android native)",
+    "WordPress customization",
+    "Simple data entry or admin tasks",
+    "SEO or marketing tasks",
+    "Blockchain/crypto projects",
+    "Projects requiring on-site presence"
+  ],
+
+  "rate_preferences": {
+    "minimum_hourly": 35,
+    "preferred_hourly": 60,
+    "premium_hourly": 80,
+    "notes": "Will consider lower rates for interesting projects, long-term relationships, or portfolio-building opportunities"
+  }
+}

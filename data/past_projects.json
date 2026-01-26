@@ -1,0 +1,52 @@
+[
+  {
+    "title": "E-commerce Platform Migration",
+    "description": "Migrated a legacy PHP e-commerce site to a modern Django/React stack. Implemented new payment processing with Stripe, inventory management system, and real-time order tracking. The project involved data migration of 50K+ products and customer records.",
+    "skills": ["Python", "Django", "React", "PostgreSQL", "Stripe API", "Docker", "AWS"],
+    "duration": "3 months",
+    "budget": "$15,000 fixed price",
+    "outcome": "Successfully launched on time, 40% improvement in page load speeds, client reported 25% increase in conversions. Received 5-star review.",
+    "client_feedback": "John was exceptional. He understood our requirements immediately and delivered beyond expectations. His communication was excellent throughout.",
+    "why_successful": "Clear scope definition upfront, weekly demos to client, proactive communication about potential issues"
+  },
+  {
+    "title": "Real-time Analytics Dashboard",
+    "description": "Built a real-time analytics dashboard for a SaaS startup. Used WebSockets for live updates, PostgreSQL for data storage, and React with D3.js for visualizations. Integrated with their existing API and added new endpoints for analytics data.",
+    "skills": ["Python", "FastAPI", "WebSockets", "React", "D3.js", "PostgreSQL", "Redis"],
+    "duration": "6 weeks",
+    "budget": "$8,000 fixed price",
+    "outcome": "Dashboard handles 10K concurrent users, sub-second update latency. Client extended contract for ongoing maintenance.",
+    "client_feedback": "Incredible work on the dashboard. The real-time features work flawlessly and our users love it.",
+    "why_successful": "Strong technical skills in real-time systems, delivered MVP quickly then iterated"
+  },
+  {
+    "title": "API Integration Project",
+    "description": "Integrated multiple third-party APIs (Salesforce, HubSpot, Mailchimp) into client's existing Django application. Built a unified data sync system with error handling, retry logic, and admin dashboard for monitoring.",
+    "skills": ["Python", "Django", "REST APIs", "Celery", "Redis", "PostgreSQL"],
+    "duration": "4 weeks",
+    "budget": "$50/hr (80 hours)",
+    "outcome": "Reduced manual data entry by 90%, saved client 20 hours/week. System has been running reliably for 18 months.",
+    "client_feedback": "John built exactly what we needed. The system just works and we haven't had any issues since launch.",
+    "why_successful": "Experience with enterprise APIs, robust error handling, comprehensive documentation"
+  },
+  {
+    "title": "Automated Data Pipeline",
+    "description": "Designed and implemented an ETL pipeline to process and analyze large datasets from multiple sources. Used Python with pandas for data transformation, scheduled with Airflow, and stored results in a data warehouse.",
+    "skills": ["Python", "Pandas", "Apache Airflow", "PostgreSQL", "AWS S3", "Data Engineering"],
+    "duration": "2 months",
+    "budget": "$12,000 fixed price",
+    "outcome": "Pipeline processes 5M+ records daily with 99.9% uptime. Reduced manual reporting time from 2 days to 15 minutes.",
+    "client_feedback": "The pipeline has transformed how we work with data. John's expertise in data engineering was exactly what we needed.",
+    "why_successful": "Deep experience with data processing, scalable architecture design, thorough testing"
+  },
+  {
+    "title": "MVP Development for Startup",
+    "description": "Built a complete MVP for a marketplace startup. Full-stack development with Django backend, React frontend, user authentication, payment processing, and admin panel. Deployed on AWS with CI/CD pipeline.",
+    "skills": ["Python", "Django", "React", "PostgreSQL", "Stripe", "AWS", "Docker", "GitHub Actions"],
+    "duration": "2.5 months",
+    "budget": "$18,000 fixed price",
+    "outcome": "MVP launched successfully, startup raised seed funding partly based on the technical demo. Ongoing maintenance contract.",
+    "client_feedback": "John was instrumental in getting our MVP out the door. He moved fast while maintaining code quality.",
+    "why_successful": "Startup experience, ability to prioritize features, fast iteration cycles"
+  }
+]

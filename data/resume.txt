@@ -1,0 +1,71 @@
+JOHN DOE
+Senior Software Developer
+
+Contact: john.doe@email.com | (555) 123-4567 | linkedin.com/in/johndoe | github.com/johndoe
+Location: Remote (US-based)
+
+================================================================================
+PROFESSIONAL SUMMARY
+================================================================================
+
+Experienced software developer with 8+ years of expertise in full-stack development,
+specializing in Python backend systems and modern JavaScript frameworks. Proven track
+record of delivering high-quality, scalable solutions for startups and enterprise clients.
+Strong communicator with experience working in agile, remote-first environments.
+
+================================================================================
+TECHNICAL SKILLS
+================================================================================
+
+Languages:        Python, JavaScript/TypeScript, SQL, Go, Rust
+Backend:          Django, FastAPI, Flask, Node.js, Express
+Frontend:         React, Vue.js, Next.js, HTML5/CSS3, Tailwind
+Databases:        PostgreSQL, MySQL, MongoDB, Redis, Elasticsearch
+Cloud/DevOps:     AWS (EC2, S3, Lambda, RDS), GCP, Docker, Kubernetes, CI/CD
+APIs:             REST, GraphQL, WebSockets, OAuth2, JWT
+Tools:            Git, GitHub Actions, Terraform, Linux, Nginx
+
+================================================================================
+PROFESSIONAL EXPERIENCE
+================================================================================
+
+SENIOR SOFTWARE ENGINEER | TechStartup Inc. | 2020 - Present (Remote)
+- Architected and built a real-time data processing pipeline handling 1M+ events/day
+- Led migration from monolith to microservices, reducing deployment time by 70%
+- Mentored team of 4 junior developers, establishing code review practices
+- Implemented automated testing pipeline achieving 90% code coverage
+
+FULL-STACK DEVELOPER | WebAgency Co. | 2017 - 2020 (Remote)
+- Developed custom e-commerce platforms for 15+ clients using Django and React
+- Built RESTful APIs and integrated third-party services (Stripe, Shopify, Salesforce)
+- Optimized database queries reducing page load times by 60%
+- Managed client relationships and translated requirements into technical specs
+
+SOFTWARE DEVELOPER | LocalTech Solutions | 2015 - 2017
+- Built internal tools and automation scripts using Python
+- Developed customer-facing web applications using Flask and jQuery
+- Maintained legacy systems and performed data migrations
+
+================================================================================
+EDUCATION & CERTIFICATIONS
+================================================================================
+
+Bachelor of Science in Computer Science | State University | 2015
+AWS Certified Solutions Architect - Associate | 2022
+Python Professional Certificate | 2021
+
+================================================================================
+KEY ACHIEVEMENTS
+================================================================================
+
+- Successfully delivered 50+ freelance projects on Upwork with 100% job success score
+- Contributed to open-source projects with 500+ GitHub stars
+- Published technical articles on Python best practices (10K+ readers)
+
+================================================================================
+AVAILABILITY & RATES
+================================================================================
+
+Available for: Part-time (20 hrs/week) or project-based work
+Timezone: EST (flexible with overlap for other timezones)
+Preferred Rate: $60-80/hr depending on project scope and duration
