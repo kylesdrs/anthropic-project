@@ -42,6 +42,11 @@ class Config:
     GRADING_CRITERIA_FILE = DATA_DIR / "grading_criteria.json"
     PROCESSED_EMAILS_FILE = DATA_DIR / "processed_emails.json"
 
+    # Promotion sorter settings
+    PROMOTION_ANALYSIS_FILE = DATA_DIR / "promotion_analysis.json"
+    PROMOTION_MAX_EMAILS = int(os.getenv("PROMOTION_MAX_EMAILS", "50"))
+    PROMOTION_DAYS_BACK = int(os.getenv("PROMOTION_DAYS_BACK", "30"))
+
     @classmethod
     def validate(cls) -> list[str]:
         """Validate configuration and return list of errors."""

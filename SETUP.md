@@ -184,6 +184,82 @@ sudo systemctl start gmail-job-monitor
 0 * * * * cd /path/to/gmail-job-monitor && python main.py --once >> logs/monitor.log 2>&1
 ```
 
+## Promotion Sorter
+
+The promotion sorter helps you clean up your inbox by analyzing promotional emails and recommending which ones to unsubscribe from.
+
+### Quick Start
+
+```bash
+# Analyze promotional emails from the last 30 days
+python promotion_sorter.py
+
+# Analyze more emails from a longer time period
+python promotion_sorter.py --max-emails 100 --days 60
+
+# Only analyze unread promotional emails
+python promotion_sorter.py --unread-only
+
+# Quiet mode (just summary, no full report)
+python promotion_sorter.py --quiet
+```
+
+### Command Line Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--max-emails` | 50 | Maximum number of emails to analyze |
+| `--days` | 30 | How many days back to look (0 = all time) |
+| `--unread-only` | false | Only analyze unread emails |
+| `--output` | data/promotion_analysis.json | Output file for results |
+| `--quiet` | false | Show only summary, not full report |
+
+### How It Works
+
+1. **Connects to Gmail** using your existing OAuth credentials
+2. **Fetches promotional emails** from Gmail's Promotions category
+3. **Analyzes each email** with Claude AI to determine:
+   - Sender/company name and category
+   - Email type (newsletter, marketing, transactional, etc.)
+   - Usefulness score (0-100)
+   - Spam indicators and value indicators
+   - Estimated sending frequency
+4. **Makes recommendations**:
+   - **Keep**: Valuable newsletters, important updates from services you use
+   - **Unsubscribe**: Aggressive marketing, companies you don't engage with
+   - **Review**: Could be valuable but needs your input
+5. **Extracts unsubscribe links** when available for easy unsubscription
+
+### Output
+
+The tool generates:
+- A detailed console report with all recommendations
+- A JSON file (`data/promotion_analysis.json`) with full analysis data
+
+### Example Output
+
+```
+============================================================
+PROMOTIONAL EMAIL ANALYSIS REPORT
+============================================================
+
+Total emails analyzed: 50
+  - Recommended to KEEP: 12
+  - Recommended to UNSUBSCRIBE: 28
+  - Needs REVIEW: 10
+
+------------------------------------------------------------
+RECOMMENDED UNSUBSCRIBES
+------------------------------------------------------------
+
+1. RandomStore (Retail)
+   Email: deals@randomstore.com
+   Type: Marketing | Frequency: Daily
+   Reason: Aggressive daily marketing with no user engagement
+   Spam indicators: high frequency, generic offers
+   Unsubscribe: https://randomstore.com/unsubscribe?...
+```
+
 ## Cloud Deployment Options
 
 ### Render
@@ -228,11 +304,13 @@ If you hit rate limits:
 
 ```
 gmail-job-monitor/
-├── main.py                  # Main orchestration script
+├── main.py                  # Main orchestration script (Job Monitor)
+├── promotion_sorter.py      # Promotion sorter CLI tool
 ├── config.py                # Configuration management
-├── gmail_monitor.py         # Gmail API integration
-├── job_extractor.py         # Email content parsing
-├── claude_analyzer.py       # Claude API integration
+├── gmail_monitor.py         # Gmail API integration (Job Monitor)
+├── job_extractor.py         # Email content parsing (Job Monitor)
+├── claude_analyzer.py       # Claude API integration (Job Monitor)
+├── promotion_analyzer.py    # Promotion analysis with Claude
 ├── docs_writer.py           # Google Docs output
 ├── requirements.txt         # Python dependencies
 ├── .env                     # Environment variables (create from .env.example)
@@ -246,7 +324,8 @@ gmail-job-monitor/
     ├── resume.txt                # Your resume
     ├── past_projects.json        # Past project examples
     ├── grading_criteria.json     # Job grading criteria
-    └── processed_emails.json     # Tracking file (auto-generated)
+    ├── processed_emails.json     # Tracking file (auto-generated)
+    └── promotion_analysis.json   # Promotion analysis results (auto-generated)
 ```
 
 ## Security Notes
