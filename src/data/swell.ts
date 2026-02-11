@@ -166,12 +166,25 @@ async function fetchFromWillyweather(): Promise<SwellConditions | null> {
 
     if (allSwellEntries.length === 0) return null;
 
+    // Find the entry closest to now (not just the first one, which may be midnight)
+    const nowMs = Date.now();
+    let closestSwellIdx = 0;
+    let closestSwellDiff = Infinity;
+    for (let i = 0; i < allSwellEntries.length; i++) {
+      const diff = Math.abs(new Date(allSwellEntries[i].dateTime).getTime() - nowMs);
+      if (diff < closestSwellDiff) {
+        closestSwellDiff = diff;
+        closestSwellIdx = i;
+      }
+    }
+
+    const currentEntry = allSwellEntries[closestSwellIdx];
     const current: SwellReading = {
-      timestamp: allSwellEntries[0].dateTime,
-      height: allSwellEntries[0].height,
-      period: allSwellEntries[0].period,
-      direction: allSwellEntries[0].directionText,
-      directionDeg: allSwellEntries[0].direction,
+      timestamp: currentEntry.dateTime,
+      height: currentEntry.height,
+      period: currentEntry.period,
+      direction: currentEntry.directionText,
+      directionDeg: currentEntry.direction,
     };
 
     const forecast: SwellForecastPoint[] = allSwellEntries.map((e) => ({
@@ -194,8 +207,14 @@ async function fetchFromWillyweather(): Promise<SwellConditions | null> {
       directionDeg: e.direction,
     }));
 
+    // Use entries around the current time for trend (a few before + a few after)
+    const trendStart = Math.max(0, closestSwellIdx - 3);
+    const trendEnd = Math.min(allSwellEntries.length, closestSwellIdx + 4);
+    const trendEntries = allSwellEntries.slice(trendStart, trendEnd);
+    // Reverse so newest is first (determineTrend expects newest-first)
+    trendEntries.reverse();
     const trend = determineTrend(
-      allSwellEntries.map((e) => ({
+      trendEntries.map((e) => ({
         height: e.height,
         timestamp: e.dateTime,
       }))
