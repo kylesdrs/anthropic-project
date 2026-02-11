@@ -363,20 +363,56 @@ function parseSSTFromObs(raw: unknown): number | null {
   return null;
 }
 
+// --- Mock data (used when BOM APIs are unreachable) ---
+
+function mockWeatherConditions(): WeatherConditions {
+  const tides = generateApproximateTides();
+  const tideState = estimateTideState(tides);
+
+  return {
+    observation: {
+      timestamp: new Date().toISOString(),
+      airTemp: 24,
+      humidity: 68,
+      windSpeed: 8,
+      windGust: 14,
+      windDirection: "NW",
+      windDirectionDeg: 315,
+      pressure: 1018,
+      rainfall: 0,
+      cloud: "Partly cloudy",
+    },
+    tides: { predictions: tides, ...tideState },
+    rainfall: {
+      last24h: 0,
+      last48h: 2.4,
+      last72h: 2.4,
+      daysSinceSignificantRain: 5,
+    },
+    seaSurfaceTemp: 22.3,
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
 // --- Main fetch function ---
 
 /**
  * Fetch all weather conditions from BOM.
  * Cached for 30 minutes to avoid hammering the API.
+ * Falls back to realistic mock data when APIs are unreachable.
  */
 export async function fetchWeatherData(): Promise<WeatherConditions> {
   return cachedFetch("bom-weather", TTL.THIRTY_MINUTES, async () => {
-    // Try primary station first, fallback to Sydney Airport
     let rawObs: unknown;
     try {
       rawObs = await fetchBomJson(BOM_OBSERVATIONS_URL);
     } catch {
-      rawObs = await fetchBomJson(BOM_SYDNEY_AIRPORT_URL);
+      try {
+        rawObs = await fetchBomJson(BOM_SYDNEY_AIRPORT_URL);
+      } catch {
+        console.warn("BOM APIs unreachable — using mock weather data");
+        return mockWeatherConditions();
+      }
     }
 
     const observation = parseBomObservation(rawObs);

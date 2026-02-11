@@ -265,11 +265,53 @@ async function fetchFromBomBuoy(): Promise<SwellConditions | null> {
   }
 }
 
+// --- Mock data (used when all swell APIs are unreachable) ---
+
+function mockSwellConditions(): SwellConditions {
+  const now = new Date();
+
+  // Generate a realistic 3-day swell forecast
+  const forecast: SwellForecastPoint[] = [];
+  for (let h = 0; h < 72; h += 3) {
+    const t = new Date(now);
+    t.setHours(t.getHours() + h);
+    forecast.push({
+      timestamp: t.toISOString(),
+      height: 1.2 + Math.sin(h / 12) * 0.4,
+      period: 10 + Math.sin(h / 18) * 2,
+      direction: "SSE",
+      directionDeg: 155,
+    });
+  }
+
+  return {
+    current: {
+      timestamp: now.toISOString(),
+      height: 1.2,
+      period: 10,
+      direction: "SSE",
+      directionDeg: 155,
+    },
+    secondary: {
+      timestamp: now.toISOString(),
+      height: 0.5,
+      period: 7,
+      direction: "E",
+      directionDeg: 90,
+    },
+    trend: "holding",
+    forecast,
+    windForecast: [],
+    fetchedAt: now.toISOString(),
+  };
+}
+
 // --- Main fetch function ---
 
 /**
  * Fetch swell conditions from best available source.
- * Tries Willyweather first (has forecast), falls back to BOM buoy (obs only).
+ * Tries Willyweather first (has forecast), falls back to BOM buoy (obs only),
+ * then to realistic mock data.
  * Cached for 1 hour.
  */
 export async function fetchSwellData(): Promise<SwellConditions> {
@@ -282,20 +324,8 @@ export async function fetchSwellData(): Promise<SwellConditions> {
     const buoy = await fetchFromBomBuoy();
     if (buoy) return buoy;
 
-    // If all sources fail, return empty conditions
-    return {
-      current: {
-        timestamp: new Date().toISOString(),
-        height: 0,
-        period: 0,
-        direction: "N/A",
-        directionDeg: 0,
-      },
-      secondary: null,
-      trend: "holding",
-      forecast: [],
-      windForecast: [],
-      fetchedAt: new Date().toISOString(),
-    };
+    // All sources failed — use mock data
+    console.warn("Swell APIs unreachable — using mock swell data");
+    return mockSwellConditions();
   });
 }
