@@ -52,7 +52,7 @@ export interface SwellConditions {
 // --- Willyweather config ---
 
 // Long Reef location ID on Willyweather (Northern Beaches reference)
-const WILLYWEATHER_LOCATION_ID = "4950"; // Long Reef, NSW
+const WILLYWEATHER_LOCATION_ID = "30089"; // Long Reef Beach, Sydney, NSW
 const WILLYWEATHER_BASE = "https://api.willyweather.com.au/v2";
 
 // Open-Meteo Marine API — free, no key, has swell forecasts
