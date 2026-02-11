@@ -125,13 +125,19 @@ export function effectiveSwellImpact(height: number, period: number): number {
  */
 async function fetchFromWillyweather(): Promise<SwellConditions | null> {
   const apiKey = process.env.WILLYWEATHER_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey) {
+    console.warn("Willyweather: WILLYWEATHER_API_KEY not set");
+    return null;
+  }
 
   try {
     const url = `${WILLYWEATHER_BASE}/${apiKey}/locations/${WILLYWEATHER_LOCATION_ID}/weather.json?forecasts=swell,wind&days=3`;
     const res = await fetch(url);
 
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.warn(`Willyweather: API returned ${res.status} ${res.statusText}`);
+      return null;
+    }
 
     const data = (await res.json()) as {
       forecasts?: {
@@ -229,7 +235,8 @@ async function fetchFromWillyweather(): Promise<SwellConditions | null> {
       source: "willyweather" as const,
       fetchedAt: new Date().toISOString(),
     };
-  } catch {
+  } catch (err) {
+    console.error("Willyweather: fetch failed", err);
     return null;
   }
 }
