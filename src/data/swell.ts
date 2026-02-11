@@ -123,9 +123,16 @@ export function effectiveSwellImpact(height: number, period: number): number {
  * Fetch swell data from Willyweather API.
  * Requires WILLYWEATHER_API_KEY in environment.
  */
+// Captures why Willyweather failed so we can surface it when falling back
+let _wwDebugInfo: string = "not attempted";
+function getWillyweatherDebug(): string {
+  return _wwDebugInfo;
+}
+
 async function fetchFromWillyweather(): Promise<SwellConditions | null> {
   const apiKey = process.env.WILLYWEATHER_API_KEY;
   if (!apiKey) {
+    _wwDebugInfo = "WILLYWEATHER_API_KEY not set in env";
     console.warn("Willyweather: WILLYWEATHER_API_KEY not set");
     return null;
   }
@@ -135,7 +142,9 @@ async function fetchFromWillyweather(): Promise<SwellConditions | null> {
     const res = await fetch(url, { cache: "no-store" });
 
     if (!res.ok) {
-      console.warn(`Willyweather: API returned ${res.status} ${res.statusText}`);
+      const body = await res.text().catch(() => "");
+      _wwDebugInfo = `API returned ${res.status} ${res.statusText}: ${body.substring(0, 200)}`;
+      console.warn(`Willyweather: ${_wwDebugInfo}`);
       return null;
     }
 
@@ -236,6 +245,7 @@ async function fetchFromWillyweather(): Promise<SwellConditions | null> {
       fetchedAt: new Date().toISOString(),
     };
   } catch (err) {
+    _wwDebugInfo = `fetch error: ${err instanceof Error ? err.message : String(err)}`;
     console.error("Willyweather: fetch failed", err);
     return null;
   }
@@ -425,11 +435,11 @@ export async function fetchSwellData(): Promise<SwellConditions | null> {
 
     // 2. Open-Meteo Marine (free, has forecasts)
     const om = await fetchFromOpenMeteo();
-    if (om) return om;
+    if (om) return { ...om, wwDebug: getWillyweatherDebug() };
 
     // 3. BOM wave buoy (free, observations only)
     const buoy = await fetchFromBomBuoy();
-    if (buoy) return buoy;
+    if (buoy) return { ...buoy, wwDebug: getWillyweatherDebug() };
 
     // All sources failed — return null, never fabricate data
     console.warn("All swell APIs unreachable — no swell data available");
