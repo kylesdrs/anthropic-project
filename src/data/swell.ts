@@ -1,8 +1,11 @@
 /**
  * Swell and surf forecast data fetching.
  *
- * Primary source: Willyweather API (Australian-focused, good coastal coverage).
- * Fallback: BOM wave buoy data (Sydney waverider buoy).
+ * Fallback chain:
+ * 1. Willyweather API (paid, best Australian coastal data)
+ * 2. Open-Meteo Marine API (free, no key, global coverage, has forecasts)
+ * 3. BOM wave buoy (free, observations only — no forecast)
+ * 4. Mock data (offline/demo mode)
  *
  * Provides: current swell (height, period, direction), forecast,
  * trend, and secondary swell info.
@@ -50,6 +53,11 @@ export interface SwellConditions {
 // Long Reef location ID on Willyweather (Northern Beaches reference)
 const WILLYWEATHER_LOCATION_ID = "4950"; // Long Reef, NSW
 const WILLYWEATHER_BASE = "https://api.willyweather.com.au/v2";
+
+// Open-Meteo Marine API — free, no key, has swell forecasts
+// Coords: Long Reef, Northern Beaches
+const OPEN_METEO_MARINE_URL =
+  "https://marine-api.open-meteo.com/v1/marine?latitude=-33.74&longitude=151.32&hourly=wave_height,wave_period,wave_direction,swell_wave_height,swell_wave_period,swell_wave_direction,wind_wave_height,wind_wave_period,wind_wave_direction&forecast_days=3&timezone=Australia%2FSydney";
 
 // BOM wave buoy fallback — Sydney waverider buoy
 const BOM_WAVE_BUOY_URL =
@@ -206,6 +214,111 @@ async function fetchFromWillyweather(): Promise<SwellConditions | null> {
 }
 
 /**
+ * Fetch swell data from Open-Meteo Marine API (free, no key).
+ * Provides hourly swell forecasts with height, period, and direction.
+ * Separates primary swell from wind waves.
+ */
+async function fetchFromOpenMeteo(): Promise<SwellConditions | null> {
+  try {
+    const res = await fetch(OPEN_METEO_MARINE_URL);
+    if (!res.ok) return null;
+
+    const data = (await res.json()) as {
+      hourly?: {
+        time?: string[];
+        wave_height?: (number | null)[];
+        wave_period?: (number | null)[];
+        wave_direction?: (number | null)[];
+        swell_wave_height?: (number | null)[];
+        swell_wave_period?: (number | null)[];
+        swell_wave_direction?: (number | null)[];
+        wind_wave_height?: (number | null)[];
+        wind_wave_period?: (number | null)[];
+        wind_wave_direction?: (number | null)[];
+      };
+    };
+
+    const hourly = data.hourly;
+    if (!hourly?.time || hourly.time.length === 0) return null;
+
+    // Find the index closest to now
+    const nowMs = Date.now();
+    let closestIdx = 0;
+    let closestDiff = Infinity;
+    for (let i = 0; i < hourly.time.length; i++) {
+      const diff = Math.abs(new Date(hourly.time[i]).getTime() - nowMs);
+      if (diff < closestDiff) {
+        closestDiff = diff;
+        closestIdx = i;
+      }
+    }
+
+    const swellH = hourly.swell_wave_height?.[closestIdx] ?? hourly.wave_height?.[closestIdx] ?? 0;
+    const swellP = hourly.swell_wave_period?.[closestIdx] ?? hourly.wave_period?.[closestIdx] ?? 0;
+    const swellD = hourly.swell_wave_direction?.[closestIdx] ?? hourly.wave_direction?.[closestIdx] ?? 0;
+
+    const current: SwellReading = {
+      timestamp: hourly.time[closestIdx],
+      height: Math.round(swellH * 10) / 10,
+      period: Math.round(swellP),
+      direction: degreesToCompass(swellD),
+      directionDeg: Math.round(swellD),
+    };
+
+    // Secondary swell (wind waves) if available and significant
+    let secondary: SwellReading | null = null;
+    const windWaveH = hourly.wind_wave_height?.[closestIdx];
+    if (windWaveH && windWaveH >= 0.3) {
+      const windWaveP = hourly.wind_wave_period?.[closestIdx] ?? 0;
+      const windWaveD = hourly.wind_wave_direction?.[closestIdx] ?? 0;
+      secondary = {
+        timestamp: hourly.time[closestIdx],
+        height: Math.round(windWaveH * 10) / 10,
+        period: Math.round(windWaveP),
+        direction: degreesToCompass(windWaveD),
+        directionDeg: Math.round(windWaveD),
+      };
+    }
+
+    // Build forecast from hourly data (every 3 hours to match Willyweather density)
+    const forecast: SwellForecastPoint[] = [];
+    for (let i = closestIdx; i < hourly.time.length; i += 3) {
+      const h = hourly.swell_wave_height?.[i] ?? hourly.wave_height?.[i] ?? 0;
+      const p = hourly.swell_wave_period?.[i] ?? hourly.wave_period?.[i] ?? 0;
+      const d = hourly.swell_wave_direction?.[i] ?? hourly.wave_direction?.[i] ?? 0;
+      forecast.push({
+        timestamp: hourly.time[i],
+        height: Math.round(h * 10) / 10,
+        period: Math.round(p),
+        direction: degreesToCompass(d),
+        directionDeg: Math.round(d),
+      });
+    }
+
+    // Trend from the next 6 hours of data
+    const trendReadings = [];
+    for (let i = closestIdx; i < Math.min(closestIdx + 7, hourly.time.length); i++) {
+      const h = hourly.swell_wave_height?.[i] ?? hourly.wave_height?.[i] ?? 0;
+      trendReadings.push({ height: h, timestamp: hourly.time[i] });
+    }
+    // Reverse so newest is first (determineTrend expects newest-first)
+    trendReadings.reverse();
+    const trend = determineTrend(trendReadings);
+
+    return {
+      current,
+      secondary,
+      trend,
+      forecast,
+      windForecast: [], // Open-Meteo marine doesn't include wind speed in knots
+      fetchedAt: new Date().toISOString(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Fetch swell data from BOM wave buoy as fallback.
  * Sydney waverider buoy provides significant wave height and period.
  */
@@ -310,22 +423,25 @@ function mockSwellConditions(): SwellConditions {
 
 /**
  * Fetch swell conditions from best available source.
- * Tries Willyweather first (has forecast), falls back to BOM buoy (obs only),
- * then to realistic mock data.
+ * Fallback chain: Willyweather -> Open-Meteo -> BOM buoy -> mock.
  * Cached for 1 hour.
  */
 export async function fetchSwellData(): Promise<SwellConditions> {
   return cachedFetch("swell-conditions", TTL.ONE_HOUR, async () => {
-    // Try Willyweather first (includes forecast)
+    // 1. Willyweather (paid, best Australian data)
     const ww = await fetchFromWillyweather();
     if (ww) return ww;
 
-    // Fallback to BOM buoy
+    // 2. Open-Meteo Marine (free, has forecasts)
+    const om = await fetchFromOpenMeteo();
+    if (om) return om;
+
+    // 3. BOM wave buoy (free, observations only)
     const buoy = await fetchFromBomBuoy();
     if (buoy) return buoy;
 
-    // All sources failed — use mock data
-    console.warn("Swell APIs unreachable — using mock swell data");
+    // 4. All sources failed — use mock data
+    console.warn("All swell APIs unreachable — using mock swell data");
     return mockSwellConditions();
   });
 }
