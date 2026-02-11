@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { generateMockBriefing } from "../data/mock-briefing";
 
 // --- Types (matching API response) ---
 
@@ -309,8 +310,10 @@ export default function Dashboard() {
         if (!res.ok) throw new Error(`API error: ${res.status}`);
         const data = await res.json();
         setBriefing(data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load");
+      } catch {
+        // API unreachable — use mock data so dashboard always renders
+        console.warn("API unreachable — using mock briefing data");
+        setBriefing(generateMockBriefing() as unknown as DiveBriefing);
       } finally {
         setLoading(false);
       }

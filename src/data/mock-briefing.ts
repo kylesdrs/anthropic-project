@@ -1,0 +1,318 @@
+/**
+ * Client-side mock briefing data.
+ *
+ * Used as a fallback when /api/briefing is unreachable
+ * (e.g. server not running, network error).
+ * Generates realistic, time-relative data so the dashboard
+ * always renders something meaningful.
+ */
+
+function hoursFromNow(h: number): string {
+  const d = new Date();
+  d.setHours(d.getHours() + h);
+  return d.toISOString();
+}
+
+function daysAgo(d: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() - d);
+  date.setHours(6 + Math.floor(Math.random() * 10));
+  return date.toISOString();
+}
+
+function getTimeOfDay(): string {
+  const h = new Date().getHours();
+  if (h < 6) return "dawn";
+  if (h < 10) return "morning";
+  if (h < 14) return "midday";
+  if (h < 17) return "afternoon";
+  return "dusk";
+}
+
+function generateTidePredictions() {
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tidalPeriodMs = 12 * 60 * 60 * 1000 + 25 * 60 * 1000;
+  const dayOffset = (now.getDate() * 47) % 720;
+  const firstHighMs = startOfDay.getTime() + dayOffset * 60 * 1000;
+
+  const points: { time: string; height: number; type: "high" | "low" }[] = [];
+  for (let i = -1; i < 4; i++) {
+    const highMs = firstHighMs + i * tidalPeriodMs;
+    const lowMs = highMs + tidalPeriodMs / 2;
+    points.push({
+      time: new Date(highMs).toISOString(),
+      height: +(1.5 + Math.sin(i * 0.3) * 0.2).toFixed(2),
+      type: "high",
+    });
+    points.push({
+      time: new Date(lowMs).toISOString(),
+      height: +(0.4 + Math.sin(i * 0.3) * 0.1).toFixed(2),
+      type: "low",
+    });
+  }
+  points.sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+
+  // Find next high/low from now
+  const nowMs = now.getTime();
+  const nextHigh = points.find((p) => p.type === "high" && new Date(p.time).getTime() > nowMs) ?? null;
+  const nextLow = points.find((p) => p.type === "low" && new Date(p.time).getTime() > nowMs) ?? null;
+
+  return { predictions: points, currentState: "rising", nextHigh, nextLow };
+}
+
+export function generateMockBriefing() {
+  const tides = generateTidePredictions();
+
+  return {
+    generatedAt: new Date().toISOString(),
+    timeOfDay: getTimeOfDay(),
+    conditions: {
+      weather: {
+        observation: {
+          timestamp: new Date().toISOString(),
+          airTemp: 24,
+          humidity: 68,
+          windSpeed: 8,
+          windGust: 14,
+          windDirection: "NW",
+          windDirectionDeg: 315,
+          pressure: 1018,
+          rainfall: 0,
+          cloud: "Partly cloudy",
+        },
+        tides,
+        rainfall: {
+          last24h: 0,
+          last48h: 2.4,
+          last72h: 2.4,
+          daysSinceSignificantRain: 5,
+        },
+        seaSurfaceTemp: 22.3,
+        fetchedAt: new Date().toISOString(),
+      },
+      swell: {
+        current: {
+          timestamp: new Date().toISOString(),
+          height: 1.2,
+          period: 10,
+          direction: "SSE",
+          directionDeg: 155,
+        },
+        secondary: {
+          timestamp: new Date().toISOString(),
+          height: 0.5,
+          period: 7,
+          direction: "E",
+          directionDeg: 90,
+        },
+        trend: "holding",
+        forecast: Array.from({ length: 24 }, (_, i) => ({
+          timestamp: hoursFromNow(i * 3),
+          height: +(1.2 + Math.sin(i / 4) * 0.4).toFixed(1),
+          period: +(10 + Math.sin(i / 6) * 2).toFixed(0),
+          direction: "SSE",
+          directionDeg: 155,
+        })),
+        windForecast: [],
+        fetchedAt: new Date().toISOString(),
+      },
+      sharkActivity: {
+        alerts: [
+          {
+            id: "mock-001",
+            date: daysAgo(1),
+            type: "tagged_detection",
+            species: "white",
+            location: { lat: -33.7404, lng: 151.3235, beach: "Long Reef" },
+            details: "Tagged white shark (2.8m) detected at Long Reef listening station. Heading south.",
+          },
+          {
+            id: "mock-002",
+            date: daysAgo(2),
+            type: "drone_sighting",
+            species: "unknown",
+            location: { lat: -33.7495, lng: 151.312, beach: "Dee Why" },
+            details: "Shark (~2m) spotted by Westpac Lifesaver drone 150m offshore. Beach cleared for 1 hour.",
+          },
+          {
+            id: "mock-003",
+            date: daysAgo(3),
+            type: "drumline_catch",
+            species: "bull",
+            location: { lat: -33.737, lng: 151.3245, beach: "Long Reef North" },
+            details: "Bull shark (1.9m) caught on SMART drumline. Tagged and released 1km offshore.",
+          },
+          {
+            id: "mock-004",
+            date: daysAgo(5),
+            type: "aerial_sighting",
+            species: "white",
+            location: { lat: -33.7097, lng: 151.316, beach: "Narrabeen" },
+            details: "White shark (3m+) spotted by DPI aerial patrol 200m off Narrabeen headland.",
+          },
+        ],
+        daysSinceLastActivity: 1,
+        source: "mock",
+        fetchedAt: new Date().toISOString(),
+      },
+    },
+    visibility: {
+      metres: 8.5,
+      confidence: "high",
+      rating: "good",
+      factors: [
+        { name: "Rainfall", impact: 2, description: "5 days since significant rain — water has had time to clear" },
+        { name: "Swell", impact: -1, description: "1.2m mid-period — moderate bottom disturbance" },
+        { name: "Wind", impact: 1.5, description: "Offshore NW 8kt — flattening surface, improving vis" },
+        { name: "Tide", impact: 1, description: "Rising tide — cleaner ocean water pushing inshore" },
+        { name: "Season", impact: 1, description: "Summer — typically better vis with EAC influence" },
+        { name: "Site", impact: 0, description: "No significant site-specific modifier" },
+      ],
+    },
+    siteRankings: [
+      {
+        site: { id: "bluefish-point", name: "Bluefish Point", status: "legal", restrictions: "Outside Cabbage Tree Bay Aquatic Reserve" },
+        rank: 1,
+        diveScore: {
+          overall: 7.2,
+          label: "Good",
+          breakdown: { visibility: 7, fishActivity: 7.5, safety: 7, comfort: 8 },
+          topReasons: ["Good vis (8.5m)", "Good chances: Kingfish, Trevally", "Light offshore NW"],
+          concerns: [],
+        },
+        conditionsFit: { swellOk: false, windIdeal: true, tideGood: true, overallFit: "good" },
+        topSpecies: [
+          { name: "Yellowtail Kingfish", likelihood: { score: 65, reasoning: "Good conditions — warm water, reasonable vis, rising tide" }, regulation: "65cm min, bag 5" },
+          { name: "Silver Trevally", likelihood: { score: 58, reasoning: "Year-round resident, good reef structure" }, regulation: "No min size, bag 20" },
+          { name: "Australian Bonito", likelihood: { score: 52, reasoning: "Active in warm water, often in schools around headlands" }, regulation: "No min size, bag 20" },
+          { name: "Snapper", likelihood: { score: 40, reasoning: "Present year-round, better chances in cooler months" }, regulation: "30cm min, bag 10" },
+        ],
+        warnings: [],
+      },
+      {
+        site: { id: "freshwater-headland", name: "Freshwater Headland", status: "legal", restrictions: "Outside Cabbage Tree Bay reserve" },
+        rank: 2,
+        diveScore: {
+          overall: 6.8,
+          label: "Good",
+          breakdown: { visibility: 7, fishActivity: 7, safety: 6.5, comfort: 7.5 },
+          topReasons: ["Good vis (8.5m)", "Good chances: Kingfish"],
+          concerns: [],
+        },
+        conditionsFit: { swellOk: false, windIdeal: true, tideGood: true, overallFit: "fair" },
+        topSpecies: [
+          { name: "Yellowtail Kingfish", likelihood: { score: 60, reasoning: "Pelagics move through on current" }, regulation: "65cm min, bag 5" },
+          { name: "Silver Trevally", likelihood: { score: 55, reasoning: "Reef resident species" }, regulation: "No min size, bag 20" },
+          { name: "Snapper", likelihood: { score: 38, reasoning: "Present in deeper ledges" }, regulation: "30cm min, bag 10" },
+        ],
+        warnings: [],
+      },
+      {
+        site: { id: "long-reef", name: "Long Reef", status: "restricted", restrictions: "Spearfishing for finfish only" },
+        rank: 3,
+        diveScore: {
+          overall: 6.4,
+          label: "Fair",
+          breakdown: { visibility: 6.5, fishActivity: 7, safety: 6, comfort: 6.5 },
+          topReasons: ["Good chances: Kingfish, Bonito"],
+          concerns: ["Swell 1.2m exceeds site max 1.0m"],
+        },
+        conditionsFit: { swellOk: false, windIdeal: true, tideGood: true, overallFit: "fair" },
+        topSpecies: [
+          { name: "Yellowtail Kingfish", likelihood: { score: 62, reasoning: "Northern drop-off is productive" }, regulation: "65cm min, bag 5" },
+          { name: "Australian Bonito", likelihood: { score: 55, reasoning: "Schools frequent the reef edge" }, regulation: "No min size, bag 20" },
+          { name: "Silver Trevally", likelihood: { score: 50, reasoning: "Resident on the reef" }, regulation: "No min size, bag 20" },
+        ],
+        warnings: ["Swell 1.2m exceeds site max 1.0m", "Restricted: Spearfishing for finfish only"],
+      },
+      {
+        site: { id: "narrabeen-head", name: "Narrabeen Head", status: "restricted", restrictions: "Spearfishing for finfish only" },
+        rank: 4,
+        diveScore: {
+          overall: 6.1,
+          label: "Fair",
+          breakdown: { visibility: 6.5, fishActivity: 6, safety: 6, comfort: 7 },
+          topReasons: ["Good vis (8.5m)"],
+          concerns: [],
+        },
+        conditionsFit: { swellOk: true, windIdeal: true, tideGood: true, overallFit: "good" },
+        topSpecies: [
+          { name: "Snapper", likelihood: { score: 48, reasoning: "Good ledge habitat for snapper" }, regulation: "30cm min, bag 10" },
+          { name: "Yellowtail Kingfish", likelihood: { score: 42, reasoning: "Less frequent than southern sites" }, regulation: "65cm min, bag 5" },
+          { name: "Dusky Flathead", likelihood: { score: 35, reasoning: "Sand/reef interface habitat" }, regulation: "36-70cm slot, bag 10" },
+        ],
+        warnings: ["Restricted: Spearfishing for finfish only"],
+      },
+      {
+        site: { id: "curl-curl-headland", name: "Curl Curl Headland", status: "legal", restrictions: "No special restrictions" },
+        rank: 5,
+        diveScore: {
+          overall: 5.8,
+          label: "Fair",
+          breakdown: { visibility: 6.5, fishActivity: 5.5, safety: 5.5, comfort: 7 },
+          topReasons: ["Good vis (8.5m)"],
+          concerns: [],
+        },
+        conditionsFit: { swellOk: false, windIdeal: true, tideGood: true, overallFit: "fair" },
+        topSpecies: [
+          { name: "Silver Trevally", likelihood: { score: 50, reasoning: "Gutter resident" }, regulation: "No min size, bag 20" },
+          { name: "Snapper", likelihood: { score: 38, reasoning: "Present in reef structure" }, regulation: "30cm min, bag 10" },
+          { name: "Dusky Flathead", likelihood: { score: 35, reasoning: "Sand patches adjacent to reef" }, regulation: "36-70cm slot, bag 10" },
+        ],
+        warnings: [],
+      },
+      {
+        site: { id: "dee-why-head", name: "Dee Why Head", status: "legal", restrictions: "No special restrictions" },
+        rank: 6,
+        diveScore: {
+          overall: 5.5,
+          label: "Fair",
+          breakdown: { visibility: 6, fishActivity: 5.5, safety: 5.5, comfort: 6.5 },
+          topReasons: [],
+          concerns: [],
+        },
+        conditionsFit: { swellOk: false, windIdeal: true, tideGood: true, overallFit: "fair" },
+        topSpecies: [
+          { name: "Snapper", likelihood: { score: 45, reasoning: "Good ledge habitat" }, regulation: "30cm min, bag 10" },
+          { name: "Dusky Flathead", likelihood: { score: 38, reasoning: "Sand/reef interface" }, regulation: "36-70cm slot, bag 10" },
+          { name: "Silver Trevally", likelihood: { score: 35, reasoning: "Present on reef" }, regulation: "No min size, bag 20" },
+        ],
+        warnings: [],
+      },
+      {
+        site: { id: "north-head", name: "North Head (Manly)", status: "legal", restrictions: "No special restrictions" },
+        rank: 7,
+        diveScore: {
+          overall: 4.5,
+          label: "Marginal",
+          breakdown: { visibility: 8, fishActivity: 6.5, safety: 2, comfort: 4 },
+          topReasons: ["Excellent vis (8.5m)"],
+          concerns: ["Swell 1.2m exceeds site max 0.8m"],
+        },
+        conditionsFit: { swellOk: false, windIdeal: true, tideGood: false, overallFit: "poor" },
+        topSpecies: [
+          { name: "Yellowtail Kingfish", likelihood: { score: 70, reasoning: "Deep water attracts large pelagics" }, regulation: "65cm min, bag 5" },
+          { name: "Cobia", likelihood: { score: 30, reasoning: "Occasional visitor in warm months" }, regulation: "60cm min, bag 5" },
+          { name: "Snapper", likelihood: { score: 45, reasoning: "Deep structure holds good fish" }, regulation: "30cm min, bag 10" },
+        ],
+        warnings: ["Swell 1.2m exceeds site max 0.8m"],
+      },
+    ],
+    recommendation: {
+      go: true,
+      confidence: "high",
+      summary: "Good conditions at Bluefish Point. Good vis (8.5m), 1.2m swell. Worth a dive.",
+      bestSite: "Bluefish Point",
+      bestTimeWindow: "Now is good — rising tide bringing clean water in",
+      keyFactors: [
+        "Vis: 8.5m (good)",
+        "Swell: 1.2m @ 10s from SSE (holding)",
+        "Wind: NW 8kt",
+        "Tide: rising",
+        "Rain: 5d since significant rain",
+        "Best chances: Yellowtail Kingfish (65%), Silver Trevally (58%)",
+      ],
+    },
+  };
+}
