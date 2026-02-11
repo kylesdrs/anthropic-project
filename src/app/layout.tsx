@@ -24,9 +24,7 @@ function Header() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-14">
           <div className="flex items-center gap-3">
-            <span className="text-2xl" role="img" aria-label="Spearfishing">
-              🤿
-            </span>
+            <img src="/kingfish-logo.png" alt="Kingfish logo" className="h-8 w-8 object-contain" />
             <h1 className="text-lg font-semibold text-white tracking-tight">
               Sydney Spearfishing Intel
             </h1>
@@ -62,7 +60,8 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+        <link rel="icon" href="/kingfish-logo.png" />
+        <link rel="apple-touch-icon" href="/kingfish-logo.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
       </head>
       <body className="bg-ocean-950 text-ocean-100 min-h-screen antialiased">
