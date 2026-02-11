@@ -45,6 +45,9 @@ env/
 *.swo
 *~
 
+# TypeScript build info
+tsconfig.tsbuildinfo
+
 # OS
 .DS_Store
 Thumbs.db
