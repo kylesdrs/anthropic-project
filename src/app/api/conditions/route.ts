@@ -17,10 +17,20 @@ export async function GET() {
       fetchSharkActivity(),
     ]);
 
+    // Temporary diagnostic: show WW env var status
+    const wwKey = process.env.WILLYWEATHER_API_KEY;
+    const _wwDiag = {
+      envSet: !!wwKey,
+      envLength: wwKey?.length ?? 0,
+      envPrefix: wwKey ? wwKey.substring(0, 4) + "..." : "NOT SET",
+      locationId: "30089",
+    };
+
     return NextResponse.json({
       weather,
       swell,
       sharkActivity,
+      _wwDiag,
       fetchedAt: new Date().toISOString(),
     });
   } catch (error) {
