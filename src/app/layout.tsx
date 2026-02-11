@@ -1,10 +1,21 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import RegisterSW from "./components/RegisterSW";
+
+export const viewport: Viewport = {
+  themeColor: "#0a1628",
+};
 
 export const metadata: Metadata = {
   title: "Sydney Spearfishing Intel",
   description:
     "Live dive conditions, site rankings, and species forecasts for Sydney's Northern Beaches",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Spearo Intel",
+  },
 };
 
 function Header() {
@@ -50,7 +61,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+      </head>
       <body className="bg-ocean-950 text-ocean-100 min-h-screen antialiased">
+        <RegisterSW />
         <Header />
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           {children}

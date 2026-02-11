@@ -307,25 +307,31 @@ function SiteCard({ ranking }: { ranking: SiteRanking }) {
 export default function Dashboard() {
   const [briefing, setBriefing] = useState<DiveBriefing | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchBriefing() {
-      try {
-        const res = await fetch("/api/briefing");
-        if (!res.ok) throw new Error(`API error: ${res.status}`);
-        const data = await res.json();
-        setBriefing(data);
-      } catch (err) {
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Could not reach the briefing API. Is the server running?"
-        );
-      } finally {
-        setLoading(false);
-      }
+  async function fetchBriefing(isRefresh = false) {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/briefing", { cache: "no-store" });
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      const data = await res.json();
+      setBriefing(data);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not reach the briefing API. Is the server running?"
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
+  }
+
+  useEffect(() => {
     fetchBriefing();
   }, []);
 
@@ -347,7 +353,7 @@ export default function Dashboard() {
           <p className="text-red-400 mb-2">Failed to load briefing</p>
           <p className="text-ocean-500 text-sm">{error}</p>
           <button
-            onClick={() => window.location.reload()}
+            onClick={() => fetchBriefing()}
             className="mt-4 px-4 py-2 rounded-lg bg-ocean-800 text-ocean-200 text-sm hover:bg-ocean-700 transition-colors"
           >
             Retry
@@ -370,6 +376,30 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
+      {/* Refresh bar */}
+      <div className="flex items-center justify-end">
+        <button
+          onClick={() => fetchBriefing(true)}
+          disabled={refreshing}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-ocean-900/60 border border-ocean-800 text-ocean-300 text-sm hover:bg-ocean-800 hover:text-white transition-colors disabled:opacity-50"
+        >
+          <svg
+            className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+            />
+          </svg>
+          {refreshing ? "Refreshing..." : "Refresh"}
+        </button>
+      </div>
+
       {/* Data availability warning */}
       {unavailableSources.length > 0 && (
         <div className="rounded-xl bg-orange-500/10 border border-orange-500/30 p-4">
