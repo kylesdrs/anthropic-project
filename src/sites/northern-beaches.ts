@@ -59,7 +59,56 @@ export const northernBeachesSites: DiveSite[] = [
     ],
     hazards: ["Slippery rocks on entry", "Strong surge in swell over 1.5m"],
     notes:
-      "NO SPEARFISHING — Cabbage Tree Bay Aquatic Reserve. Included as a reference site only. Excellent snorkelling with abundant marine life due to protection. Blue groper are resident and very approachable.",
+      "NO SPEARFISHING — Cabbage Tree Bay Aquatic Reserve. Included as a reference site only. Excellent snorkelling with abundant marine life due to protection. Blue groper are resident and very approachable. For spearfishing in this area, see Bluefish Point (just outside the reserve boundary).",
+  },
+  {
+    id: "bluefish-point",
+    name: "Bluefish Point",
+    lat: -33.7997,
+    lng: 151.2914,
+    status: "legal",
+    restrictions:
+      "Outside Cabbage Tree Bay Aquatic Reserve — spearfishing permitted. Know the reserve boundary: the reserve ends at the point. Stay east/south of the boundary markers.",
+    depthRange: { min: 3, max: 15 },
+    structure: [
+      "rocky reef",
+      "boulders",
+      "drop-offs",
+      "gutters",
+      "kelp edges",
+    ],
+    bestConditions: {
+      swellMax: 1.2,
+      swellDirectionProtected: ["S", "SW", "W"],
+      windDirectionIdeal: ["W", "SW", "NW"],
+      tidePreference: "rising",
+    },
+    exposure: ["E", "NE", "SE"],
+    targetSpecies: ["Kingfish", "Trevally", "Bonito", "Snapper", "Drummer"],
+    parkingNotes:
+      "Street parking along Marine Parade or Bower Lane. Walk down via the Bower coastal walk. Competitive on weekends — arrive early.",
+    entryPoints: [
+      {
+        lat: -33.7999,
+        lng: 151.2916,
+        description:
+          "Rock platform entry at Bluefish Point — check swell and surge before getting in. Easiest at lower swell.",
+      },
+      {
+        lat: -33.8003,
+        lng: 151.291,
+        description:
+          "Southern rock shelf entry — slightly more protected, short swim north to the reef edge",
+      },
+    ],
+    hazards: [
+      "Very close to reserve boundary — know exactly where the line is",
+      "Surge and wash on the rock platform in anything over 1m",
+      "Current can sweep along the point on bigger tides",
+      "Boat traffic from Manly side",
+    ],
+    notes:
+      "Just outside the Cabbage Tree Bay reserve boundary, so the fish spillover from the protected zone is real — good numbers of kingfish, trevally, and bonito move through here. The drop-offs east of the point hold fish when current is running. Proximity to the reserve means fish are less pressured than at other open spots. Be absolutely certain you're outside the reserve boundary before taking any shots.",
   },
   {
     id: "freshwater-headland",
