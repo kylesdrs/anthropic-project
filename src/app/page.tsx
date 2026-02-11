@@ -377,11 +377,11 @@ export default function Dashboard() {
   return (
     <div className="space-y-8">
       {/* Refresh bar */}
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-center">
         <button
           onClick={() => fetchBriefing(true)}
           disabled={refreshing}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-ocean-900/60 border border-ocean-800 text-ocean-300 text-sm hover:bg-ocean-800 hover:text-white transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-emerald-600 text-white font-medium text-sm hover:bg-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <svg
             className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`}
@@ -396,7 +396,7 @@ export default function Dashboard() {
               d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
             />
           </svg>
-          {refreshing ? "Refreshing..." : "Refresh"}
+          {refreshing ? "Refreshing..." : "Refresh Data"}
         </button>
       </div>
 
