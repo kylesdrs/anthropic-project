@@ -31,37 +31,6 @@ export interface DiveSite {
 
 export const northernBeachesSites: DiveSite[] = [
   {
-    id: "fairy-bower",
-    name: "Fairy Bower / The Bower",
-    lat: -33.7983,
-    lng: 151.2889,
-    status: "no-take",
-    restrictions:
-      "Inside Cabbage Tree Bay Aquatic Reserve — all fishing and spearfishing prohibited. Observation and snorkelling only.",
-    depthRange: { min: 1, max: 10 },
-    structure: ["reef platform", "boulders", "kelp beds", "sand patches"],
-    bestConditions: {
-      swellMax: 1.5,
-      swellDirectionProtected: ["S", "SW", "W"],
-      windDirectionIdeal: ["W", "SW", "NW"],
-      tidePreference: "any",
-    },
-    exposure: ["E", "NE"],
-    targetSpecies: [],
-    parkingNotes:
-      "Street parking along Bower Lane or Fairy Bower Road. Can fill up quickly on weekends.",
-    entryPoints: [
-      {
-        lat: -33.7981,
-        lng: 151.289,
-        description: "Rock platform entry at Fairy Bower Pool — easy entry in calm conditions",
-      },
-    ],
-    hazards: ["Slippery rocks on entry", "Strong surge in swell over 1.5m"],
-    notes:
-      "NO SPEARFISHING — Cabbage Tree Bay Aquatic Reserve. Included as a reference site only. Excellent snorkelling with abundant marine life due to protection. Blue groper are resident and very approachable. For spearfishing in this area, see Bluefish Point (just outside the reserve boundary).",
-  },
-  {
     id: "bluefish-point",
     name: "Bluefish Point",
     lat: -33.7997,
