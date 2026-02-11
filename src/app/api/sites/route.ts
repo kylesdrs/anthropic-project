@@ -18,6 +18,17 @@ export async function GET() {
       fetchSharkActivity(),
     ]);
 
+    if (!weather || !swell) {
+      const missing: string[] = [];
+      if (!weather) missing.push("weather");
+      if (!swell) missing.push("swell");
+      return NextResponse.json({
+        sites: [],
+        dataUnavailable: missing,
+        fetchedAt: new Date().toISOString(),
+      });
+    }
+
     // Determine current time of day
     const hour = new Date().getHours();
     let timeOfDay: "dawn" | "morning" | "midday" | "afternoon" | "dusk";

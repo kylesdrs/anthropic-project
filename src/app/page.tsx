@@ -1,13 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { generateMockBriefing } from "../data/mock-briefing";
 
 // --- Types (matching API response) ---
+
+interface DataSourceStatus {
+  weather: { available: boolean; source: string };
+  swell: { available: boolean; source: string };
+  shark: { available: boolean; source: string };
+}
 
 interface DiveBriefing {
   generatedAt: string;
   timeOfDay: string;
+  dataStatus: DataSourceStatus;
   conditions: {
     weather: {
       observation: {
@@ -31,7 +37,7 @@ interface DiveBriefing {
         daysSinceSignificantRain: number;
       };
       seaSurfaceTemp: number | null;
-    };
+    } | null;
     swell: {
       current: {
         height: number;
@@ -39,7 +45,7 @@ interface DiveBriefing {
         direction: string;
       };
       trend: string;
-    };
+    } | null;
     sharkActivity: {
       alerts: SharkAlert[];
       daysSinceLastActivity: number | null;
@@ -51,7 +57,7 @@ interface DiveBriefing {
     rating: string;
     confidence: string;
     factors: { name: string; impact: number; description: string }[];
-  };
+  } | null;
   siteRankings: SiteRanking[];
   recommendation: {
     go: boolean;
@@ -310,10 +316,12 @@ export default function Dashboard() {
         if (!res.ok) throw new Error(`API error: ${res.status}`);
         const data = await res.json();
         setBriefing(data);
-      } catch {
-        // API unreachable — use mock data so dashboard always renders
-        console.warn("API unreachable — using mock briefing data");
-        setBriefing(generateMockBriefing() as unknown as DiveBriefing);
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Could not reach the briefing API. Is the server running?"
+        );
       } finally {
         setLoading(false);
       }
@@ -349,12 +357,34 @@ export default function Dashboard() {
     );
   }
 
-  const { conditions, visibility, siteRankings, recommendation } = briefing;
+  const { conditions, visibility, siteRankings, recommendation, dataStatus } = briefing;
   const { weather, swell, sharkActivity } = conditions;
-  const obs = weather.observation;
+  const obs = weather?.observation ?? null;
+
+  // Identify unavailable data sources
+  const unavailableSources = [
+    !dataStatus?.weather?.available && "Weather (BOM)",
+    !dataStatus?.swell?.available && "Swell",
+    dataStatus?.shark?.source === "seed" && "Shark activity (using sample data)",
+  ].filter(Boolean) as string[];
 
   return (
     <div className="space-y-8">
+      {/* Data availability warning */}
+      {unavailableSources.length > 0 && (
+        <div className="rounded-xl bg-orange-500/10 border border-orange-500/30 p-4">
+          <p className="text-sm font-medium text-orange-400 mb-1">
+            Some data sources are unavailable
+          </p>
+          <p className="text-xs text-orange-300/80">
+            {unavailableSources.join(" · ")}
+          </p>
+          <p className="text-xs text-orange-500/70 mt-1">
+            Values shown as &ldquo;—&rdquo; could not be fetched from live sources. Do not rely on incomplete data for safety decisions.
+          </p>
+        </div>
+      )}
+
       {/* Hero: Recommendation */}
       <section
         className={`rounded-2xl border p-6 sm:p-8 ${recommendation.go ? scoreBg(siteRankings[0]?.diveScore.overall ?? 5) : "bg-red-500/10 border-red-500/20"}`}
@@ -404,114 +434,124 @@ export default function Dashboard() {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <ConditionCard
             label="Swell"
-            value={`${swell.current.height}m`}
-            sub={`${swell.current.period}s ${swell.current.direction} · ${swell.trend}`}
+            value={swell ? `${swell.current.height}m` : "—"}
+            sub={swell ? `${swell.current.period}s ${swell.current.direction} · ${swell.trend}` : "Data unavailable"}
           />
           <ConditionCard
             label="Wind"
-            value={`${obs.windSpeed}kt`}
-            sub={`${obs.windDirection} · gusts ${obs.windGust}kt`}
+            value={obs ? `${obs.windSpeed}kt` : "—"}
+            sub={obs ? `${obs.windDirection} · gusts ${obs.windGust}kt` : "Data unavailable"}
           />
           <ConditionCard
             label="Water Temp"
             value={
-              weather.seaSurfaceTemp
+              weather?.seaSurfaceTemp
                 ? `${weather.seaSurfaceTemp}°C`
                 : "—"
             }
-            sub={`Air ${obs.airTemp}°C`}
+            sub={obs ? `Air ${obs.airTemp}°C` : "Data unavailable"}
           />
           <ConditionCard
             label="Visibility"
-            value={`${visibility.metres}m`}
-            sub={`${visibility.rating} · ${visibility.confidence} confidence`}
+            value={visibility ? `${visibility.metres}m` : "—"}
+            sub={visibility ? `${visibility.rating} · ${visibility.confidence} confidence` : "Requires weather + swell data"}
           />
           <ConditionCard
             label="Tide"
-            value={weather.tides.currentState.replace("_", " ")}
+            value={weather ? weather.tides.currentState.replace("_", " ") : "—"}
             sub={
-              weather.tides.nextHigh
+              weather?.tides.nextHigh
                 ? `High ${formatTime(weather.tides.nextHigh.time)} (${weather.tides.nextHigh.height}m)`
                 : "—"
             }
           />
           <ConditionCard
             label="Rain (48h)"
-            value={`${weather.rainfall.last48h}mm`}
-            sub={`${weather.rainfall.daysSinceSignificantRain}d since heavy rain`}
+            value={weather ? `${weather.rainfall.last48h}mm` : "—"}
+            sub={weather ? `${weather.rainfall.daysSinceSignificantRain}d since heavy rain` : "Data unavailable"}
           />
         </div>
       </section>
 
       {/* Visibility factors */}
-      <section>
-        <h2 className="text-sm uppercase tracking-wider text-ocean-400 mb-3">
-          Visibility Breakdown
-        </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-          {visibility.factors.map((f) => (
-            <div
-              key={f.name}
-              className="rounded-lg bg-ocean-900/40 border border-ocean-800 p-3"
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-ocean-400">{f.name}</span>
-                <span
-                  className={`text-xs font-semibold ${f.impact > 0 ? "text-emerald-400" : f.impact < 0 ? "text-red-400" : "text-ocean-500"}`}
-                >
-                  {f.impact > 0 ? "+" : ""}
-                  {f.impact}m
-                </span>
+      {visibility && (
+        <section>
+          <h2 className="text-sm uppercase tracking-wider text-ocean-400 mb-3">
+            Visibility Breakdown
+          </h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+            {visibility.factors.map((f) => (
+              <div
+                key={f.name}
+                className="rounded-lg bg-ocean-900/40 border border-ocean-800 p-3"
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-ocean-400">{f.name}</span>
+                  <span
+                    className={`text-xs font-semibold ${f.impact > 0 ? "text-emerald-400" : f.impact < 0 ? "text-red-400" : "text-ocean-500"}`}
+                  >
+                    {f.impact > 0 ? "+" : ""}
+                    {f.impact}m
+                  </span>
+                </div>
+                <p className="text-[10px] text-ocean-500 leading-tight">
+                  {f.description}
+                </p>
               </div>
-              <p className="text-[10px] text-ocean-500 leading-tight">
-                {f.description}
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Site Rankings */}
       <section>
         <h2 className="text-sm uppercase tracking-wider text-ocean-400 mb-3">
           Site Rankings
         </h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {siteRankings.map((ranking) => (
-            <SiteCard key={ranking.site.id} ranking={ranking} />
-          ))}
-        </div>
+        {siteRankings.length > 0 ? (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {siteRankings.map((ranking) => (
+              <SiteCard key={ranking.site.id} ranking={ranking} />
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-xl bg-ocean-900/40 border border-ocean-800 p-6 text-center">
+            <p className="text-ocean-400 text-sm">Site rankings unavailable — requires weather and swell data</p>
+          </div>
+        )}
       </section>
 
       {/* Species Forecast */}
-      <section>
-        <h2 className="text-sm uppercase tracking-wider text-ocean-400 mb-3">
-          Species Forecast
-          <span className="text-ocean-600 ml-2 normal-case">
-            (at {siteRankings[0]?.site.name ?? "best site"})
-          </span>
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-          {(siteRankings[0]?.topSpecies ?? []).map((sp) => (
-            <div
-              key={sp.name}
-              className="rounded-lg bg-ocean-900/40 border border-ocean-800 p-3 flex items-center justify-between"
-            >
-              <div>
-                <span className="text-sm text-white">{sp.name}</span>
-                <p className="text-[10px] text-ocean-500 mt-0.5">
-                  {sp.regulation}
-                </p>
-              </div>
-              <span
-                className={`text-sm font-semibold px-2.5 py-1 rounded-full ${likelihoodColor(sp.likelihood.score)}`}
+      {siteRankings.length > 0 && (
+        <section>
+          <h2 className="text-sm uppercase tracking-wider text-ocean-400 mb-3">
+            Species Forecast
+            <span className="text-ocean-600 ml-2 normal-case">
+              (at {siteRankings[0]?.site.name ?? "best site"})
+            </span>
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {(siteRankings[0]?.topSpecies ?? []).map((sp) => (
+              <div
+                key={sp.name}
+                className="rounded-lg bg-ocean-900/40 border border-ocean-800 p-3 flex items-center justify-between"
               >
-                {sp.likelihood.score}%
-              </span>
-            </div>
-          ))}
-        </div>
-      </section>
+                <div>
+                  <span className="text-sm text-white">{sp.name}</span>
+                  <p className="text-[10px] text-ocean-500 mt-0.5">
+                    {sp.regulation}
+                  </p>
+                </div>
+                <span
+                  className={`text-sm font-semibold px-2.5 py-1 rounded-full ${likelihoodColor(sp.likelihood.score)}`}
+                >
+                  {sp.likelihood.score}%
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Safety Panel */}
       <section>
@@ -570,7 +610,9 @@ export default function Dashboard() {
       <footer className="text-center text-xs text-ocean-600 pb-8">
         <p>
           Generated {new Date(briefing.generatedAt).toLocaleString("en-AU")} ·
-          Data from BOM, Willyweather, SharkSmart
+          Weather: {dataStatus?.weather?.source ?? "unknown"} ·
+          Swell: {dataStatus?.swell?.source ?? "unknown"} ·
+          Sharks: {dataStatus?.shark?.source ?? "unknown"}
         </p>
         <p className="mt-1">
           Not a safety tool. Always assess conditions yourself before entering

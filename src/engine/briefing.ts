@@ -21,15 +21,22 @@ import { estimateVisibility } from "./visibility";
 
 // --- Types ---
 
+export interface DataSourceStatus {
+  weather: { available: boolean; source: string };
+  swell: { available: boolean; source: string };
+  shark: { available: boolean; source: string };
+}
+
 export interface DiveBriefing {
   generatedAt: string;
   timeOfDay: "dawn" | "morning" | "midday" | "afternoon" | "dusk";
+  dataStatus: DataSourceStatus;
   conditions: {
-    weather: WeatherConditions;
-    swell: SwellConditions;
+    weather: WeatherConditions | null;
+    swell: SwellConditions | null;
     sharkActivity: SharkActivitySummary;
   };
-  visibility: VisibilityEstimate;
+  visibility: VisibilityEstimate | null;
   siteRankings: SiteRanking[];
   recommendation: BriefingRecommendation;
 }
@@ -78,25 +85,47 @@ export async function generateBriefing(options?: {
     fetchSharkActivity(),
   ]);
 
-  // General visibility estimate (not site-specific)
-  const month = new Date().getMonth() + 1;
-  const visibility = estimateVisibility({
-    rainfall: weather.rainfall,
-    swell: swell.current,
-    windDirection: weather.observation.windDirection,
-    windSpeed: weather.observation.windSpeed,
-    tides: weather.tides,
-    month,
-    seaSurfaceTemp: weather.seaSurfaceTemp,
-  });
+  // Track which data sources are available
+  const dataStatus: DataSourceStatus = {
+    weather: {
+      available: weather !== null,
+      source: weather?.source ?? "unavailable",
+    },
+    swell: {
+      available: swell !== null,
+      source: swell?.source ?? "unavailable",
+    },
+    shark: {
+      available: true,
+      source: sharkActivity.source,
+    },
+  };
 
-  // Rank all sites
-  const siteRankings = rankSites(sites, {
-    weather,
-    swell,
-    sharkActivity,
-    timeOfDay,
-  });
+  // General visibility estimate (only if we have the required data)
+  let visibility: VisibilityEstimate | null = null;
+  if (weather && swell) {
+    const month = new Date().getMonth() + 1;
+    visibility = estimateVisibility({
+      rainfall: weather.rainfall,
+      swell: swell.current,
+      windDirection: weather.observation.windDirection,
+      windSpeed: weather.observation.windSpeed,
+      tides: weather.tides,
+      month,
+      seaSurfaceTemp: weather.seaSurfaceTemp,
+    });
+  }
+
+  // Rank sites only if we have enough data
+  let siteRankings: SiteRanking[] = [];
+  if (weather && swell) {
+    siteRankings = rankSites(sites, {
+      weather,
+      swell,
+      sharkActivity,
+      timeOfDay,
+    });
+  }
 
   // Generate recommendation
   const recommendation = generateRecommendation(
@@ -110,6 +139,7 @@ export async function generateBriefing(options?: {
   return {
     generatedAt: new Date().toISOString(),
     timeOfDay,
+    dataStatus,
     conditions: {
       weather,
       swell,
@@ -125,11 +155,26 @@ export async function generateBriefing(options?: {
 
 function generateRecommendation(
   rankings: SiteRanking[],
-  visibility: VisibilityEstimate,
-  weather: WeatherConditions,
-  swell: SwellConditions,
+  visibility: VisibilityEstimate | null,
+  weather: WeatherConditions | null,
+  swell: SwellConditions | null,
   timeOfDay: string
 ): BriefingRecommendation {
+  // If critical data is missing, we can't make a recommendation
+  if (!weather || !swell) {
+    const missing: string[] = [];
+    if (!weather) missing.push("weather");
+    if (!swell) missing.push("swell");
+    return {
+      go: false,
+      confidence: "low",
+      summary: `Cannot assess conditions — ${missing.join(" and ")} data unavailable. Check back later or assess conditions on-site.`,
+      bestSite: "Unknown",
+      bestTimeWindow: "Unable to determine — insufficient data",
+      keyFactors: missing.map((s) => `${s}: data unavailable`),
+    };
+  }
+
   const bestSite = rankings[0];
   const bestScore = bestSite?.diveScore.overall ?? 0;
 
@@ -138,9 +183,9 @@ function generateRecommendation(
 
   // Confidence in the recommendation
   let confidence: BriefingRecommendation["confidence"] = "medium";
-  if (visibility.confidence === "high" && bestScore >= 7) {
+  if (visibility?.confidence === "high" && bestScore >= 7) {
     confidence = "high";
-  } else if (visibility.confidence === "low" || bestScore < 4) {
+  } else if (visibility?.confidence === "low" || bestScore < 4) {
     confidence = "low";
   }
 
@@ -171,19 +216,22 @@ function generateRecommendation(
 function generateSummary(
   bestSite: SiteRanking | undefined,
   bestScore: number,
-  visibility: VisibilityEstimate,
+  visibility: VisibilityEstimate | null,
   swell: SwellConditions
 ): string {
   if (!bestSite) {
     return "Unable to generate recommendation — no sites available.";
   }
 
+  const visStr = visibility ? `${visibility.metres}m vis` : "vis unknown";
+
   if (bestScore >= 8) {
-    return `Excellent conditions. ${bestSite.site.name} is firing — ${visibility.metres}m vis, ${swell.current.height}m ${swell.trend} swell. Get in the water.`;
+    return `Excellent conditions. ${bestSite.site.name} is firing — ${visStr}, ${swell.current.height}m ${swell.trend} swell. Get in the water.`;
   }
 
   if (bestScore >= 6.5) {
-    return `Good conditions at ${bestSite.site.name}. ${visibility.rating} vis (${visibility.metres}m), ${swell.current.height}m swell. Worth a dive.`;
+    const ratingStr = visibility ? `${visibility.rating} vis (${visibility.metres}m)` : "vis unknown";
+    return `Good conditions at ${bestSite.site.name}. ${ratingStr}, ${swell.current.height}m swell. Worth a dive.`;
   }
 
   if (bestScore >= 5) {
@@ -244,14 +292,14 @@ function suggestBestTime(
 
 function collectKeyFactors(
   bestSite: SiteRanking | undefined,
-  visibility: VisibilityEstimate,
+  visibility: VisibilityEstimate | null,
   weather: WeatherConditions,
   swell: SwellConditions
 ): string[] {
   const factors: string[] = [];
 
   // Vis
-  factors.push(`Vis: ${visibility.metres}m (${visibility.rating})`);
+  factors.push(visibility ? `Vis: ${visibility.metres}m (${visibility.rating})` : "Vis: unavailable");
 
   // Swell
   factors.push(

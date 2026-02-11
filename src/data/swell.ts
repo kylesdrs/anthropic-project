@@ -45,6 +45,7 @@ export interface SwellConditions {
   trend: "building" | "holding" | "dropping";
   forecast: SwellForecastPoint[];
   windForecast: WindForecastPoint[];
+  source: "willyweather" | "open-meteo" | "bom-buoy" | "unavailable";
   fetchedAt: string;
 }
 
@@ -206,6 +207,7 @@ async function fetchFromWillyweather(): Promise<SwellConditions | null> {
       trend,
       forecast,
       windForecast,
+      source: "willyweather" as const,
       fetchedAt: new Date().toISOString(),
     };
   } catch {
@@ -311,6 +313,7 @@ async function fetchFromOpenMeteo(): Promise<SwellConditions | null> {
       trend,
       forecast,
       windForecast: [], // Open-Meteo marine doesn't include wind speed in knots
+      source: "open-meteo" as const,
       fetchedAt: new Date().toISOString(),
     };
   } catch {
@@ -371,6 +374,7 @@ async function fetchFromBomBuoy(): Promise<SwellConditions | null> {
       trend,
       forecast: [], // no forecast from buoy data
       windForecast: [],
+      source: "bom-buoy" as const,
       fetchedAt: new Date().toISOString(),
     };
   } catch {
@@ -378,55 +382,15 @@ async function fetchFromBomBuoy(): Promise<SwellConditions | null> {
   }
 }
 
-// --- Mock data (used when all swell APIs are unreachable) ---
-
-function mockSwellConditions(): SwellConditions {
-  const now = new Date();
-
-  // Generate a realistic 3-day swell forecast
-  const forecast: SwellForecastPoint[] = [];
-  for (let h = 0; h < 72; h += 3) {
-    const t = new Date(now);
-    t.setHours(t.getHours() + h);
-    forecast.push({
-      timestamp: t.toISOString(),
-      height: 1.2 + Math.sin(h / 12) * 0.4,
-      period: 10 + Math.sin(h / 18) * 2,
-      direction: "SSE",
-      directionDeg: 155,
-    });
-  }
-
-  return {
-    current: {
-      timestamp: now.toISOString(),
-      height: 1.2,
-      period: 10,
-      direction: "SSE",
-      directionDeg: 155,
-    },
-    secondary: {
-      timestamp: now.toISOString(),
-      height: 0.5,
-      period: 7,
-      direction: "E",
-      directionDeg: 90,
-    },
-    trend: "holding",
-    forecast,
-    windForecast: [],
-    fetchedAt: now.toISOString(),
-  };
-}
-
 // --- Main fetch function ---
 
 /**
  * Fetch swell conditions from best available source.
- * Fallback chain: Willyweather -> Open-Meteo -> BOM buoy -> mock.
+ * Fallback chain: Willyweather -> Open-Meteo -> BOM buoy.
+ * Returns null when all sources are unavailable — never fabricates data.
  * Cached for 1 hour.
  */
-export async function fetchSwellData(): Promise<SwellConditions> {
+export async function fetchSwellData(): Promise<SwellConditions | null> {
   return cachedFetch("swell-conditions", TTL.ONE_HOUR, async () => {
     // 1. Willyweather (paid, best Australian data)
     const ww = await fetchFromWillyweather();
@@ -440,8 +404,8 @@ export async function fetchSwellData(): Promise<SwellConditions> {
     const buoy = await fetchFromBomBuoy();
     if (buoy) return buoy;
 
-    // 4. All sources failed — use mock data
-    console.warn("All swell APIs unreachable — using mock swell data");
-    return mockSwellConditions();
+    // All sources failed — return null, never fabricate data
+    console.warn("All swell APIs unreachable — no swell data available");
+    return null;
   });
 }

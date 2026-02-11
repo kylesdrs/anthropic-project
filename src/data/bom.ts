@@ -54,6 +54,7 @@ export interface WeatherConditions {
   tides: TideData;
   rainfall: RainfallData;
   seaSurfaceTemp: number | null; // °C, null if unavailable
+  source: "bom-manly" | "bom-airport" | "unavailable";
   fetchedAt: string;
 }
 
@@ -363,55 +364,26 @@ function parseSSTFromObs(raw: unknown): number | null {
   return null;
 }
 
-// --- Mock data (used when BOM APIs are unreachable) ---
-
-function mockWeatherConditions(): WeatherConditions {
-  const tides = generateApproximateTides();
-  const tideState = estimateTideState(tides);
-
-  return {
-    observation: {
-      timestamp: new Date().toISOString(),
-      airTemp: 24,
-      humidity: 68,
-      windSpeed: 8,
-      windGust: 14,
-      windDirection: "NW",
-      windDirectionDeg: 315,
-      pressure: 1018,
-      rainfall: 0,
-      cloud: "Partly cloudy",
-    },
-    tides: { predictions: tides, ...tideState },
-    rainfall: {
-      last24h: 0,
-      last48h: 2.4,
-      last72h: 2.4,
-      daysSinceSignificantRain: 5,
-    },
-    seaSurfaceTemp: 22.3,
-    fetchedAt: new Date().toISOString(),
-  };
-}
-
 // --- Main fetch function ---
 
 /**
  * Fetch all weather conditions from BOM.
  * Cached for 30 minutes to avoid hammering the API.
- * Falls back to realistic mock data when APIs are unreachable.
+ * Returns null when APIs are unreachable — never fabricates data.
  */
-export async function fetchWeatherData(): Promise<WeatherConditions> {
+export async function fetchWeatherData(): Promise<WeatherConditions | null> {
   return cachedFetch("bom-weather", TTL.THIRTY_MINUTES, async () => {
     let rawObs: unknown;
+    let source: WeatherConditions["source"] = "bom-manly";
     try {
       rawObs = await fetchBomJson(BOM_OBSERVATIONS_URL);
     } catch {
       try {
         rawObs = await fetchBomJson(BOM_SYDNEY_AIRPORT_URL);
+        source = "bom-airport";
       } catch {
-        console.warn("BOM APIs unreachable — using mock weather data");
-        return mockWeatherConditions();
+        console.warn("BOM APIs unreachable — no weather data available");
+        return null;
       }
     }
 
@@ -425,6 +397,7 @@ export async function fetchWeatherData(): Promise<WeatherConditions> {
       tides,
       rainfall,
       seaSurfaceTemp,
+      source,
       fetchedAt: new Date().toISOString(),
     };
   });
