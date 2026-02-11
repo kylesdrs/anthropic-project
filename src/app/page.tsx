@@ -387,6 +387,15 @@ function SiteCard({
                   </div>
                 ))}
               </div>
+              <p className="mt-2 text-[11px] leading-relaxed text-ocean-300">
+                We estimate <span className="font-semibold text-ocean-100">{visibility.metres}m</span> visibility ({visibility.rating}) at {site.name}.{" "}
+                {visibility.factors
+                  .filter((f) => f.impact !== 0)
+                  .sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact))
+                  .map((f) => f.description)
+                  .join(". ")}
+                .
+              </p>
             </div>
           )}
 
