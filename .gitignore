@@ -53,5 +53,11 @@ Thumbs.db
 logs/
 *.log
 
+# Node.js / Next.js
+node_modules/
+.next/
+out/
+npm-debug.log*
+
 # Processed emails tracking (contains email IDs)
 data/processed_emails.json
