@@ -1,0 +1,98 @@
+[
+  {
+    "id": "seed-001",
+    "date": "2026-02-10T08:18:29.692Z",
+    "type": "tagged_detection",
+    "species": "white",
+    "location": {
+      "lat": -33.7404,
+      "lng": 151.3235,
+      "beach": "Long Reef"
+    },
+    "details": "Tagged white shark (2.8m) detected at Long Reef listening station. Heading south."
+  },
+  {
+    "id": "seed-002",
+    "date": "2026-02-09T07:18:29.692Z",
+    "type": "drone_sighting",
+    "species": "unknown",
+    "location": {
+      "lat": -33.7495,
+      "lng": 151.312,
+      "beach": "Dee Why"
+    },
+    "details": "Shark (~2m) spotted by Westpac Lifesaver drone 150m offshore. Beach cleared for 1 hour."
+  },
+  {
+    "id": "seed-003",
+    "date": "2026-02-08T10:18:29.692Z",
+    "type": "drumline_catch",
+    "species": "bull",
+    "location": {
+      "lat": -33.737,
+      "lng": 151.3245,
+      "beach": "Long Reef North"
+    },
+    "details": "Bull shark (1.9m) caught on SMART drumline. Tagged and released 1km offshore."
+  },
+  {
+    "id": "seed-004",
+    "date": "2026-02-06T14:18:29.692Z",
+    "type": "aerial_sighting",
+    "species": "white",
+    "location": {
+      "lat": -33.7097,
+      "lng": 151.316,
+      "beach": "Narrabeen"
+    },
+    "details": "White shark (3m+) spotted by DPI aerial patrol 200m off Narrabeen headland."
+  },
+  {
+    "id": "seed-005",
+    "date": "2026-02-03T06:18:29.692Z",
+    "type": "tagged_detection",
+    "species": "white",
+    "location": {
+      "lat": -33.7983,
+      "lng": 151.2905,
+      "beach": "Manly"
+    },
+    "details": "Previously tagged white shark detected at Manly listening station. Known individual."
+  },
+  {
+    "id": "seed-006",
+    "date": "2026-01-30T13:18:29.692Z",
+    "type": "drumline_catch",
+    "species": "bull",
+    "location": {
+      "lat": -33.751,
+      "lng": 151.311,
+      "beach": "Dee Why"
+    },
+    "details": "Bull shark (2.2m) caught on Dee Why SMART drumline. Tagged and released offshore."
+  },
+  {
+    "id": "seed-007",
+    "date": "2026-01-27T14:18:29.692Z",
+    "type": "community_report",
+    "species": "unknown",
+    "location": {
+      "lat": -33.776,
+      "lng": 151.297,
+      "beach": "Freshwater"
+    },
+    "details": "Surfer reported large shark (~2.5m) near Freshwater reef. Not confirmed by authorities."
+  },
+  {
+    "id": "seed-008",
+    "date": "2026-01-22T06:18:29.692Z",
+    "type": "aerial_sighting",
+    "species": "hammerhead",
+    "location": {
+      "lat": -33.743,
+      "lng": 151.319,
+      "beach": "Long Reef South"
+    },
+    "details": "School of hammerhead sharks (4-5 individuals) spotted from helicopter south of Long Reef."
+  }
+]
