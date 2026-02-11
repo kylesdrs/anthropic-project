@@ -25,13 +25,29 @@ import { getRegulation } from "../data/fisheries";
 
 // --- Types ---
 
+export interface SiteVisibility {
+  metres: number;
+  rating: string;
+  confidence: string;
+  factors: { name: string; impact: number; description: string }[];
+}
+
+export interface SiteSharkRisk {
+  level: string;
+  score: number;
+  recommendation: string;
+}
+
 export interface SiteRanking {
   site: DiveSite;
   rank: number; // 1 = best
   diveScore: DiveScore;
   conditionsFit: ConditionsFit;
+  visibility: SiteVisibility;
+  sharkRisk: SiteSharkRisk;
   topSpecies: SiteSpecies[];
   warnings: string[];
+  explanation: string;
 }
 
 export interface ConditionsFit {
@@ -160,13 +176,30 @@ export function rankSites(
     // 7. Warnings
     const warnings = generateWarnings(site, input, conditionsFit, sharkRisk);
 
+    // 8. Build explanation paragraph
+    const explanation = generateScoreExplanation(
+      site, input, diveScore, conditionsFit, visEstimate, topSpecies, sharkRisk
+    );
+
     return {
       site,
       rank: 0, // will be set after sorting
       diveScore,
       conditionsFit,
+      visibility: {
+        metres: visEstimate.metres,
+        rating: visEstimate.rating,
+        confidence: visEstimate.confidence,
+        factors: visEstimate.factors,
+      },
+      sharkRisk: {
+        level: sharkRisk.level,
+        score: sharkRisk.score,
+        recommendation: sharkRisk.recommendation,
+      },
       topSpecies,
       warnings,
+      explanation,
     };
   });
 
@@ -222,6 +255,117 @@ function assessConditionsFit(
   else overallFit = "poor";
 
   return { swellOk, swellProtected, windIdeal, tideGood, overallFit };
+}
+
+// --- Score explanation ---
+
+function generateScoreExplanation(
+  site: DiveSite,
+  input: RankingInput,
+  diveScore: DiveScore,
+  fit: ConditionsFit,
+  vis: { metres: number; rating: string },
+  topSpecies: SiteSpecies[],
+  sharkRisk: { level: string; score: number }
+): string {
+  const parts: string[] = [];
+  const score = diveScore.overall;
+  const swell = input.swell.current;
+  const wind = input.weather.observation;
+  const tide = input.weather.tides;
+
+  // Opening — score context
+  const label = diveScore.label.toLowerCase();
+  parts.push(
+    `${site.name} scores ${score}/10 (${diveScore.label}) today.`
+  );
+
+  // Swell explanation
+  if (fit.swellOk) {
+    const protectedNote = fit.swellProtected
+      ? `, and the ${swell.direction} direction is one this spot handles well`
+      : `, though the ${swell.direction} swell direction isn't ideal — the site is more exposed from that angle`;
+    parts.push(
+      `The ${swell.height}m swell at ${swell.period}s is within the ${site.bestConditions.swellMax}m limit${protectedNote}.`
+    );
+  } else {
+    parts.push(
+      `The ${swell.height}m swell exceeds this site's ${site.bestConditions.swellMax}m safe limit, which is the main concern.`
+    );
+  }
+
+  // Wind explanation
+  const offshore = ["W", "WSW", "SW", "WNW", "NW", "NNW"];
+  const isOffshore = offshore.includes(wind.windDirection);
+  if (fit.windIdeal) {
+    parts.push(
+      `${wind.windDirection} wind at ${wind.windSpeed}kt is ${isOffshore ? "offshore here — flattening the surface and improving clarity" : "an ideal direction for this spot"}.`
+    );
+  } else if (isOffshore) {
+    parts.push(
+      `${wind.windDirection} at ${wind.windSpeed}kt is offshore, which helps with surface conditions${wind.windSpeed >= 20 ? ", though it's getting strong" : ""}.`
+    );
+  } else {
+    parts.push(
+      `${wind.windDirection} at ${wind.windSpeed}kt is onshore here${wind.windSpeed >= 15 ? " and pushing chop and dirty water in" : ""}, which isn't ideal.`
+    );
+  }
+
+  // Visibility
+  parts.push(
+    `Visibility is estimated at ${vis.metres}m (${vis.rating}).`
+  );
+
+  // Tide
+  const tideState = tide.currentState.replace("_", " ");
+  if (fit.tideGood) {
+    parts.push(
+      `The ${tideState} tide works well here${tide.currentState === "rising" ? " — clean ocean water is pushing inshore over the reef" : ""}.`
+    );
+  } else {
+    parts.push(
+      `The ${tideState} tide isn't the best for this spot — ${site.bestConditions.tidePreference === "rising" ? "a rising tide would bring cleaner water in" : "higher tide would be better for access"}.`
+    );
+  }
+
+  // Species
+  const goodSpecies = topSpecies.filter(s => s.likelihood.score >= 50);
+  if (goodSpecies.length > 0) {
+    const speciesStr = goodSpecies
+      .slice(0, 3)
+      .map(s => `${s.name} (${s.likelihood.score}%)`)
+      .join(", ");
+    parts.push(
+      `Best chances today: ${speciesStr}.`
+    );
+  } else if (topSpecies.length > 0) {
+    parts.push(
+      `Fish activity is on the lower side — ${topSpecies[0].name} at ${topSpecies[0].likelihood.score}% is the best prospect.`
+    );
+  }
+
+  // Shark risk (only if notable)
+  if (sharkRisk.level === "elevated" || sharkRisk.level === "high") {
+    parts.push(
+      `Shark risk is ${sharkRisk.level} — worth factoring into your decision.`
+    );
+  } else if (sharkRisk.level === "low") {
+    parts.push(`Shark risk is low.`);
+  }
+
+  // Rain context (if significant)
+  const rain = input.weather.rainfall;
+  if (rain.last24h >= 10) {
+    parts.push(
+      `Note: ${rain.last24h}mm of rain in the last 24 hours means runoff will be affecting water quality.`
+    );
+  } else if (rain.daysSinceSignificantRain >= 5) {
+    parts.push(
+      `${rain.daysSinceSignificantRain} days since significant rain is helping water clarity.`
+    );
+  }
+
+  return parts.join(" ");
 }
 
 // --- Warnings ---

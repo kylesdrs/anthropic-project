@@ -69,6 +69,19 @@ interface DiveBriefing {
   };
 }
 
+interface SiteVisibility {
+  metres: number;
+  rating: string;
+  confidence: string;
+  factors: { name: string; impact: number; description: string }[];
+}
+
+interface SiteSharkRisk {
+  level: string;
+  score: number;
+  recommendation: string;
+}
+
 interface SiteRanking {
   site: { id: string; name: string; status: string; restrictions: string };
   rank: number;
@@ -86,16 +99,20 @@ interface SiteRanking {
   };
   conditionsFit: {
     swellOk: boolean;
+    swellProtected?: boolean;
     windIdeal: boolean;
     tideGood: boolean;
     overallFit: string;
   };
+  visibility?: SiteVisibility;
+  sharkRisk?: SiteSharkRisk;
   topSpecies: {
     name: string;
     likelihood: { score: number; reasoning: string };
     regulation: string;
   }[];
   warnings: string[];
+  explanation?: string;
 }
 
 interface SharkAlert {
@@ -191,15 +208,26 @@ function ConditionCard({
   );
 }
 
-function SiteCard({ ranking }: { ranking: SiteRanking }) {
-  const { site, diveScore, conditionsFit, topSpecies, warnings } = ranking;
+function SiteCard({
+  ranking,
+  conditions,
+}: {
+  ranking: SiteRanking;
+  conditions: DiveBriefing["conditions"];
+}) {
+  const { site, diveScore, conditionsFit, topSpecies, warnings, visibility, sharkRisk, explanation } = ranking;
   const [expanded, setExpanded] = useState(false);
+
+  const swell = conditions.swell;
+  const obs = conditions.weather?.observation ?? null;
+  const weather = conditions.weather;
 
   return (
     <div
       className={`rounded-xl border p-4 cursor-pointer transition-all ${scoreBg(diveScore.overall)}`}
       onClick={() => setExpanded(!expanded)}
     >
+      {/* Header row */}
       <div className="flex items-center justify-between mb-2">
         <div>
           <span className="text-xs text-ocean-400 mr-2">#{ranking.rank}</span>
@@ -222,6 +250,9 @@ function SiteCard({ ranking }: { ranking: SiteRanking }) {
         <span className="text-xs text-ocean-500">
           Fit: {conditionsFit.overallFit}
         </span>
+        <span className="text-xs text-ocean-600">
+          {expanded ? "tap to collapse" : "tap for detail"}
+        </span>
       </div>
 
       {diveScore.topReasons.length > 0 && (
@@ -230,7 +261,7 @@ function SiteCard({ ranking }: { ranking: SiteRanking }) {
         </p>
       )}
 
-      {warnings.length > 0 && (
+      {warnings.length > 0 && !expanded && (
         <div className="mt-2">
           {warnings.slice(0, 2).map((w, i) => (
             <p key={i} className="text-xs text-orange-400">
@@ -241,59 +272,186 @@ function SiteCard({ ranking }: { ranking: SiteRanking }) {
       )}
 
       {expanded && (
-        <div className="mt-3 pt-3 border-t border-ocean-800 space-y-3">
-          {/* Score breakdown */}
-          <div className="grid grid-cols-4 gap-2 text-center">
-            {(
-              [
-                ["Vis", diveScore.breakdown.visibility],
-                ["Fish", diveScore.breakdown.fishActivity],
-                ["Safety", diveScore.breakdown.safety],
-                ["Comfort", diveScore.breakdown.comfort],
-              ] as [string, number][]
-            ).map(([label, val]) => (
-              <div key={label}>
-                <p className="text-xs text-ocean-500">{label}</p>
-                <p className={`text-sm font-semibold ${scoreColor(val)}`}>
-                  {val}
+        <div className="mt-3 pt-3 border-t border-ocean-800 space-y-4">
+          {/* Explanation paragraph */}
+          {explanation && (
+            <div className="rounded-lg bg-ocean-950/60 border border-ocean-700/40 p-3">
+              <p className="text-xs font-medium text-ocean-300 mb-1.5">Why this score?</p>
+              <p className="text-sm text-ocean-200 leading-relaxed">
+                {explanation}
+              </p>
+            </div>
+          )}
+
+          {/* Conditions at this site */}
+          <div>
+            <p className="text-xs font-medium text-ocean-400 mb-2">Conditions at {site.name}</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-lg bg-ocean-950/50 p-2.5">
+                <p className="text-[10px] text-ocean-500">Swell</p>
+                <p className="text-sm font-semibold text-white">
+                  {swell ? `${swell.current.height}m` : "—"}
+                </p>
+                <p className="text-[10px] text-ocean-500">
+                  {swell ? `${swell.current.period}s ${swell.current.direction} · ${swell.trend}` : "—"}
+                </p>
+                {conditionsFit.swellOk ? (
+                  <p className="text-[10px] text-emerald-400 mt-0.5">Within site limit</p>
+                ) : (
+                  <p className="text-[10px] text-red-400 mt-0.5">Exceeds site limit</p>
+                )}
+              </div>
+
+              <div className="rounded-lg bg-ocean-950/50 p-2.5">
+                <p className="text-[10px] text-ocean-500">Wind</p>
+                <p className="text-sm font-semibold text-white">
+                  {obs ? `${obs.windSpeed}kt ${obs.windDirection}` : "—"}
+                </p>
+                <p className="text-[10px] text-ocean-500">
+                  {obs ? `Gusts ${obs.windGust}kt` : "—"}
+                </p>
+                {conditionsFit.windIdeal ? (
+                  <p className="text-[10px] text-emerald-400 mt-0.5">Ideal direction</p>
+                ) : (
+                  <p className="text-[10px] text-yellow-400 mt-0.5">Not ideal direction</p>
+                )}
+              </div>
+
+              <div className="rounded-lg bg-ocean-950/50 p-2.5">
+                <p className="text-[10px] text-ocean-500">Visibility</p>
+                <p className={`text-sm font-semibold ${visibility ? scoreColor(diveScore.breakdown.visibility) : "text-ocean-500"}`}>
+                  {visibility ? `${visibility.metres}m` : "—"}
+                </p>
+                <p className="text-[10px] text-ocean-500">
+                  {visibility ? `${visibility.rating} · ${visibility.confidence} conf.` : "—"}
                 </p>
               </div>
-            ))}
+
+              <div className="rounded-lg bg-ocean-950/50 p-2.5">
+                <p className="text-[10px] text-ocean-500">Tide</p>
+                <p className="text-sm font-semibold text-white">
+                  {weather ? weather.tides.currentState.replace("_", " ") : "—"}
+                </p>
+                <p className="text-[10px] text-ocean-500">
+                  {weather?.tides.nextHigh
+                    ? `High ${formatTime(weather.tides.nextHigh.time)} (${weather.tides.nextHigh.height}m)`
+                    : "—"}
+                </p>
+                {conditionsFit.tideGood ? (
+                  <p className="text-[10px] text-emerald-400 mt-0.5">Good for this site</p>
+                ) : (
+                  <p className="text-[10px] text-yellow-400 mt-0.5">Not ideal</p>
+                )}
+              </div>
+
+              <div className="rounded-lg bg-ocean-950/50 p-2.5">
+                <p className="text-[10px] text-ocean-500">Rain (48h)</p>
+                <p className="text-sm font-semibold text-white">
+                  {weather ? `${weather.rainfall.last48h}mm` : "—"}
+                </p>
+                <p className="text-[10px] text-ocean-500">
+                  {weather ? `${weather.rainfall.daysSinceSignificantRain}d since heavy` : "—"}
+                </p>
+              </div>
+
+              <div className="rounded-lg bg-ocean-950/50 p-2.5">
+                <p className="text-[10px] text-ocean-500">Shark Risk</p>
+                <p className={`text-sm font-semibold ${
+                  sharkRisk?.level === "low" ? "text-emerald-400" :
+                  sharkRisk?.level === "moderate" ? "text-yellow-400" :
+                  sharkRisk?.level === "elevated" ? "text-orange-400" :
+                  sharkRisk?.level === "high" ? "text-red-400" : "text-ocean-400"
+                }`}>
+                  {sharkRisk ? sharkRisk.level : "—"}
+                </p>
+                <p className="text-[10px] text-ocean-500">
+                  {sharkRisk ? `Score: ${sharkRisk.score}/100` : "—"}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Visibility factors for this site */}
+          {visibility && visibility.factors.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-ocean-400 mb-2">Visibility Factors</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {visibility.factors.map((f) => (
+                  <div key={f.name} className="flex items-center justify-between rounded bg-ocean-950/40 px-2 py-1.5">
+                    <span className="text-[10px] text-ocean-400">{f.name}</span>
+                    <span className={`text-[10px] font-semibold ${
+                      f.impact > 0 ? "text-emerald-400" : f.impact < 0 ? "text-red-400" : "text-ocean-500"
+                    }`}>
+                      {f.impact > 0 ? "+" : ""}{f.impact}m
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Score breakdown */}
+          <div>
+            <p className="text-xs font-medium text-ocean-400 mb-2">Score Breakdown</p>
+            <div className="grid grid-cols-4 gap-2 text-center">
+              {(
+                [
+                  ["Vis", diveScore.breakdown.visibility, "30%"],
+                  ["Fish", diveScore.breakdown.fishActivity, "30%"],
+                  ["Safety", diveScore.breakdown.safety, "25%"],
+                  ["Comfort", diveScore.breakdown.comfort, "15%"],
+                ] as [string, number, string][]
+              ).map(([label, val, weight]) => (
+                <div key={label} className="rounded-lg bg-ocean-950/40 p-2">
+                  <p className="text-[10px] text-ocean-500">{label}</p>
+                  <p className={`text-lg font-bold ${scoreColor(val)}`}>{val}</p>
+                  <p className="text-[10px] text-ocean-600">{weight}</p>
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Top species */}
           {topSpecies.length > 0 && (
             <div>
-              <p className="text-xs text-ocean-400 mb-1">Species</p>
-              {topSpecies.slice(0, 4).map((sp) => (
+              <p className="text-xs font-medium text-ocean-400 mb-2">Species Forecast</p>
+              {topSpecies.map((sp) => (
                 <div
                   key={sp.name}
-                  className="flex items-center justify-between py-1"
+                  className="flex items-center justify-between py-1.5 border-b border-ocean-800/30 last:border-0"
                 >
-                  <span className="text-xs text-ocean-200">{sp.name}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-ocean-500">
-                      {sp.regulation}
-                    </span>
-                    <span
-                      className={`text-xs px-1.5 py-0.5 rounded-full ${likelihoodColor(sp.likelihood.score)}`}
-                    >
-                      {sp.likelihood.score}%
-                    </span>
+                  <div>
+                    <span className="text-xs text-ocean-200">{sp.name}</span>
+                    <p className="text-[10px] text-ocean-500">{sp.regulation}</p>
                   </div>
+                  <span
+                    className={`text-xs font-semibold px-2 py-0.5 rounded-full ${likelihoodColor(sp.likelihood.score)}`}
+                  >
+                    {sp.likelihood.score}%
+                  </span>
                 </div>
               ))}
             </div>
           )}
 
-          {diveScore.concerns.length > 0 && (
+          {/* Warnings / concerns */}
+          {(warnings.length > 0 || diveScore.concerns.length > 0) && (
             <div>
-              <p className="text-xs text-ocean-400 mb-1">Concerns</p>
-              {diveScore.concerns.map((c, i) => (
-                <p key={i} className="text-xs text-orange-400">
-                  {c}
-                </p>
+              <p className="text-xs font-medium text-ocean-400 mb-1">Warnings</p>
+              {warnings.map((w, i) => (
+                <p key={`w-${i}`} className="text-xs text-orange-400 mb-0.5">{w}</p>
               ))}
+              {diveScore.concerns.map((c, i) => (
+                <p key={`c-${i}`} className="text-xs text-orange-400 mb-0.5">{c}</p>
+              ))}
+            </div>
+          )}
+
+          {/* Site info */}
+          {site.restrictions && (
+            <div className="rounded-lg bg-ocean-950/40 p-2.5">
+              <p className="text-[10px] text-ocean-500 mb-0.5">Regulations</p>
+              <p className="text-[10px] text-ocean-300 leading-snug">{site.restrictions}</p>
             </div>
           )}
         </div>
@@ -541,7 +699,7 @@ export default function Dashboard() {
         {siteRankings.length > 0 ? (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {siteRankings.map((ranking) => (
-              <SiteCard key={ranking.site.id} ranking={ranking} />
+              <SiteCard key={ranking.site.id} ranking={ranking} conditions={conditions} />
             ))}
           </div>
         ) : (
