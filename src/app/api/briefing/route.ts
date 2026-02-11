@@ -1,12 +1,32 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { generateBriefing } from "../../../engine/briefing";
 
 /**
- * GET /api/briefing?date=2026-02-12&time=09:00
+ * GET /api/briefing?hour=7
  *
- * Returns a full dive briefing for the requested date/time.
+ * Returns a full dive briefing. Optional `hour` param (0-23)
+ * overrides the current hour for time-of-day calculations.
  */
-export async function GET() {
-  return NextResponse.json({
-    message: "Briefing API — not yet implemented",
-  });
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const hourParam = searchParams.get("hour");
+    const hour =
+      hourParam !== null ? parseInt(hourParam, 10) : undefined;
+
+    const briefing = await generateBriefing({
+      hour: hour !== undefined && !isNaN(hour) ? hour : undefined,
+    });
+
+    return NextResponse.json(briefing);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown error";
+    return NextResponse.json(
+      { error: "Failed to generate briefing", detail: message },
+      { status: 500 }
+    );
+  }
 }
+
+export const dynamic = "force-dynamic";
