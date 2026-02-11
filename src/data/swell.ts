@@ -132,7 +132,7 @@ async function fetchFromWillyweather(): Promise<SwellConditions | null> {
 
   try {
     const url = `${WILLYWEATHER_BASE}/${apiKey}/locations/${WILLYWEATHER_LOCATION_ID}/weather.json?forecasts=swell,wind&days=3`;
-    const res = await fetch(url);
+    const res = await fetch(url, { cache: "no-store" });
 
     if (!res.ok) {
       console.warn(`Willyweather: API returned ${res.status} ${res.statusText}`);
@@ -248,7 +248,7 @@ async function fetchFromWillyweather(): Promise<SwellConditions | null> {
  */
 async function fetchFromOpenMeteo(): Promise<SwellConditions | null> {
   try {
-    const res = await fetch(OPEN_METEO_MARINE_URL);
+    const res = await fetch(OPEN_METEO_MARINE_URL, { cache: "no-store" });
     if (!res.ok) return null;
 
     const data = (await res.json()) as {
@@ -354,6 +354,7 @@ async function fetchFromOpenMeteo(): Promise<SwellConditions | null> {
 async function fetchFromBomBuoy(): Promise<SwellConditions | null> {
   try {
     const res = await fetch(BOM_WAVE_BUOY_URL, {
+      cache: "no-store",
       headers: {
         "User-Agent": "SpearfishingIntel/1.0 (personal project)",
       },

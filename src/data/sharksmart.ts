@@ -288,6 +288,7 @@ async function fetchLiveAlerts(): Promise<SharkAlert[] | null> {
     const res = await fetch(
       "https://sharksmart.mobiddiction.com.au/api/alerts?days=30&region=sydney",
       {
+        cache: "no-store",
         headers: {
           "User-Agent": "SpearfishingIntel/1.0",
           Accept: "application/json",

@@ -92,6 +92,7 @@ function classifyWindDirection(dir: string): "offshore" | "onshore" | "cross" {
 
 async function fetchBomJson(url: string): Promise<unknown> {
   const res = await fetch(url, {
+    cache: "no-store",
     headers: {
       "User-Agent": "SpearfishingIntel/1.0 (personal project)",
     },
@@ -274,6 +275,7 @@ async function fetchTideData(): Promise<TideData> {
     const res = await fetch(
       "http://www.bom.gov.au/ntc/IDO59001/IDO59001_2026_NSW_TP011.json",
       {
+        cache: "no-store",
         headers: {
           "User-Agent": "SpearfishingIntel/1.0 (personal project)",
         },
