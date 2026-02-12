@@ -26,7 +26,8 @@ export interface VisibilityInput {
   swell: SwellReading;
   swellTrend?: "building" | "holding" | "dropping";
   windDirection: string;
-  windSpeed: number; // knots
+  windSpeed: number; // knots (sustained)
+  windGust: number; // knots (gusts)
   tides: TideData;
   month: number; // 1-12
   seaSurfaceTemp: number | null;
@@ -73,10 +74,11 @@ export function estimateVisibility(
   vis += swellImpact.impact;
   factors.push(swellImpact);
 
-  // --- 3. Wind direction ---
+  // --- 3. Wind direction (use effective wind: higher of sustained and 75% of gust) ---
+  const effectiveWind = Math.max(input.windSpeed, (input.windGust ?? 0) * 0.75);
   const windImpact = calculateWindImpact(
     input.windDirection,
-    input.windSpeed
+    Math.round(effectiveWind)
   );
   vis += windImpact.impact;
   factors.push(windImpact);

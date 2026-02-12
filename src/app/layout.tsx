@@ -29,23 +29,6 @@ function Header() {
               Sydney Spearfishing Intel — Daily Briefing
             </h1>
           </div>
-          <nav className="hidden sm:flex items-center gap-6 text-sm text-ocean-300">
-            <a href="/" className="hover:text-teal-400 transition-colors">
-              Dashboard
-            </a>
-            <a
-              href="/sites"
-              className="hover:text-teal-400 transition-colors"
-            >
-              Sites
-            </a>
-            <a
-              href="/briefing"
-              className="hover:text-teal-400 transition-colors"
-            >
-              Briefing
-            </a>
-          </nav>
         </div>
       </div>
     </header>

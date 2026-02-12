@@ -142,6 +142,7 @@ export async function generateBriefing(options?: {
       swellTrend: swell.trend,
       windDirection: weather.observation.windDirection,
       windSpeed: weather.observation.windSpeed,
+      windGust: weather.observation.windGust,
       tides: weather.tides,
       month,
       seaSurfaceTemp: weather.seaSurfaceTemp,

@@ -118,12 +118,22 @@ function parseBomObservation(raw: unknown): WeatherObservation {
 
   const latest = data[0];
 
+  // Wind speed: prefer knots, fall back to km/h conversion
+  const windSpeedKt =
+    (latest.wind_spd_kt as number) ??
+    ((latest.wind_spd_kmh as number) ?? 0) / 1.852;
+
+  // Wind gust: BOM harbour stations often omit gust_kt — try gust_kmh
+  const gustKt =
+    (latest.gust_kt as number) ??
+    ((latest.gust_kmh as number) ?? 0) / 1.852;
+
   return {
     timestamp: latest.local_date_time_full as string,
     airTemp: (latest.air_temp as number) ?? 0,
     humidity: (latest.rel_hum as number) ?? 0,
-    windSpeed: (latest.wind_spd_kt as number) ?? 0,
-    windGust: (latest.gust_kt as number) ?? 0,
+    windSpeed: Math.round(windSpeedKt),
+    windGust: Math.round(gustKt),
     windDirection:
       (latest.wind_dir as string) ||
       parseWindDirection(latest.wind_dir_deg as number | null),

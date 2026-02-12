@@ -24,7 +24,8 @@ export interface DiveScoreInput {
   sharkRisk: SharkRiskAssessment;
   speciesScores: { speciesName: string; likelihood: SpeciesLikelihood }[];
   swell: SwellReading;
-  windSpeed: number; // knots
+  windSpeed: number; // knots (sustained)
+  windGust: number; // knots (gusts)
   windDirection: string;
   airTemp: number;
   waterTemp: number | null;
@@ -52,9 +53,10 @@ export interface DiveScore {
 export function calculateDiveScore(input: DiveScoreInput): DiveScore {
   const visScore = scoreVisibility(input.visibility);
   const fishScore = scoreFishActivity(input.speciesScores);
-  const safetyScore = scoreSafety(input.sharkRisk, input.swell, input.site);
+  const safetyScore = scoreSafety(input.sharkRisk, input.swell, input.site, input.windGust);
   const comfortScore = scoreComfort(
     input.windSpeed,
+    input.windGust,
     input.windDirection,
     input.airTemp,
     input.waterTemp,
@@ -128,7 +130,8 @@ function scoreFishActivity(
 function scoreSafety(
   sharkRisk: SharkRiskAssessment,
   swell: SwellReading,
-  site: DiveSite
+  site: DiveSite,
+  windGust: number = 0
 ): number {
   let score = 10;
 
@@ -169,26 +172,39 @@ function scoreSafety(
     }
   }
 
+  // Wind gust penalty — strong gusts make diving unsafe
+  if (windGust >= 25) {
+    score -= 3;
+  } else if (windGust >= 18) {
+    score -= 1.5;
+  } else if (windGust >= 12) {
+    score -= 0.5;
+  }
+
   return Math.max(1, score);
 }
 
 function scoreComfort(
   windSpeed: number,
+  windGust: number,
   windDirection: string,
   airTemp: number,
   waterTemp: number | null,
   site: DiveSite
 ): number {
-  let score = 8; // start high — we're going diving!
+  let score = 7; // neutral start
 
-  // Wind comfort
-  if (windSpeed >= 25) {
+  // Wind comfort — use the worse of sustained and gust
+  const effectiveWind = Math.max(windSpeed, windGust * 0.8);
+  if (effectiveWind >= 25) {
     score -= 4;
-  } else if (windSpeed >= 18) {
-    score -= 2.5;
-  } else if (windSpeed >= 12) {
-    score -= 1;
-  } else if (windSpeed < 5) {
+  } else if (effectiveWind >= 18) {
+    score -= 3;
+  } else if (effectiveWind >= 12) {
+    score -= 1.5;
+  } else if (effectiveWind >= 8) {
+    score -= 0.5;
+  } else if (effectiveWind < 5) {
     score += 1; // glass off
   }
 
@@ -290,7 +306,9 @@ function collectConcerns(input: DiveScoreInput): string[] {
     );
   }
 
-  if (input.windSpeed >= 18) {
+  if (input.windGust >= 18) {
+    concerns.push(`Strong gusts ${input.windGust}kt`);
+  } else if (input.windSpeed >= 18) {
     concerns.push(`Strong wind ${input.windSpeed}kt`);
   }
 

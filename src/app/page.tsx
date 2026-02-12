@@ -660,8 +660,8 @@ export default function Dashboard() {
           />
           <ConditionCard
             label="Wind"
-            value={obs ? `${obs.windSpeed}kt` : "—"}
-            sub={obs ? `${obs.windDirection} · gusts ${obs.windGust}kt` : "Data unavailable"}
+            value={obs ? `${obs.windSpeed}kt ${obs.windDirection}` : "—"}
+            sub={obs ? `Gusts ${obs.windGust}kt` : "Data unavailable"}
           />
           <ConditionCard
             label="Water Temp"
@@ -799,6 +799,15 @@ export default function Dashboard() {
               Source: {sharkActivity.source}
             </span>
           </div>
+
+          {sharkActivity.source === "seed" && (
+            <div className="rounded-lg bg-yellow-500/10 border border-yellow-500/20 p-2.5 mb-3">
+              <p className="text-[11px] text-yellow-400">
+                Showing sample data — SharkSmart has no public API. For live alerts, use the{" "}
+                <a href="https://www.sharksmart.nsw.gov.au/sharksmart-app" target="_blank" rel="noopener noreferrer" className="underline">SharkSmart app</a>.
+              </p>
+            </div>
+          )}
 
           {sharkActivity.alerts.length > 0 && (
             <div className="space-y-2">
