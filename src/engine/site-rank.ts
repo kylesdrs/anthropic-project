@@ -91,8 +91,10 @@ export function rankSites(
       {
         rainfall: input.weather.rainfall,
         swell: input.swell.current,
+        swellTrend: input.swell.trend,
         windDirection: input.weather.observation.windDirection,
         windSpeed: input.weather.observation.windSpeed,
+        windGust: input.weather.observation.windGust,
         tides: input.weather.tides,
         month,
         seaSurfaceTemp: input.weather.seaSurfaceTemp,
@@ -167,6 +169,7 @@ export function rankSites(
       })),
       swell: input.swell.current,
       windSpeed: input.weather.observation.windSpeed,
+      windGust: input.weather.observation.windGust,
       windDirection: input.weather.observation.windDirection,
       airTemp: input.weather.observation.airTemp,
       waterTemp: input.weather.seaSurfaceTemp,
