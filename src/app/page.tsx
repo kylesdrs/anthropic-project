@@ -150,6 +150,14 @@ function scoreBorderAccent(score: number): string {
   return "border-red-500/20";
 }
 
+function sonarColor(score: number): string {
+  if (score >= 8) return "sonar-green";
+  if (score >= 6.5) return "sonar-teal";
+  if (score >= 5) return "sonar-yellow";
+  if (score >= 3.5) return "sonar-orange";
+  return "sonar-red";
+}
+
 function riskColor(level: string): string {
   switch (level) {
     case "low":
@@ -720,18 +728,20 @@ export default function Dashboard() {
             </p>
           </div>
           <div className="text-center flex-shrink-0">
-            <div className={`inline-flex flex-col items-center px-5 py-4 rounded-2xl bg-ocean-950/60 ${scoreGlow(topScore)}`}>
-              <div
-                className={`text-5xl sm:text-6xl font-bold leading-none ${scoreColor(topScore)}`}
-              >
-                {siteRankings[0]?.diveScore.overall ?? "—"}
+            <div className={`sonar-wrapper ${sonarColor(topScore)} inline-block`}>
+              <div className={`inline-flex flex-col items-center px-5 py-4 rounded-2xl bg-ocean-950/60 ${scoreGlow(topScore)}`}>
+                <div
+                  className={`text-5xl sm:text-6xl font-bold leading-none ${scoreColor(topScore)}`}
+                >
+                  {siteRankings[0]?.diveScore.overall ?? "—"}
+                </div>
+                <p className="text-[11px] text-ocean-400 mt-1.5 font-medium">
+                  {siteRankings[0]?.diveScore.label ?? "—"}
+                </p>
+                <p className="text-[10px] text-ocean-500 mt-0.5">
+                  {recommendation.bestSite}
+                </p>
               </div>
-              <p className="text-[11px] text-ocean-400 mt-1.5 font-medium">
-                {siteRankings[0]?.diveScore.label ?? "—"}
-              </p>
-              <p className="text-[10px] text-ocean-500 mt-0.5">
-                {recommendation.bestSite}
-              </p>
             </div>
           </div>
         </div>
