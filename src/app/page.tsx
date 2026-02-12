@@ -127,13 +127,13 @@ interface SharkAlert {
 // --- Site map data (Northern Beaches coastline) ---
 
 const SITE_COORDS: { id: string; name: string; x: number; y: number }[] = [
-  { id: "north-head",           name: "North Head",          x: 78, y: 92 },
-  { id: "bluefish-point",       name: "Bluefish Point",      x: 73, y: 80 },
-  { id: "freshwater-headland",  name: "Freshwater",          x: 71, y: 72 },
-  { id: "curl-curl-headland",   name: "Curl Curl",           x: 68, y: 62 },
-  { id: "dee-why-head",         name: "Dee Why Head",        x: 72, y: 48 },
-  { id: "long-reef",            name: "Long Reef",           x: 80, y: 38 },
-  { id: "narrabeen-head",       name: "Narrabeen Head",      x: 73, y: 24 },
+  { id: "north-head",           name: "North Head",          x: 22, y: 92 },
+  { id: "bluefish-point",       name: "Bluefish Point",      x: 27, y: 80 },
+  { id: "freshwater-headland",  name: "Freshwater",          x: 29, y: 72 },
+  { id: "curl-curl-headland",   name: "Curl Curl",           x: 32, y: 62 },
+  { id: "dee-why-head",         name: "Dee Why Head",        x: 28, y: 48 },
+  { id: "long-reef",            name: "Long Reef",           x: 20, y: 38 },
+  { id: "narrabeen-head",       name: "Narrabeen Head",      x: 27, y: 24 },
 ];
 
 // --- Helpers ---
@@ -301,7 +301,7 @@ function SiteMap({ rankings }: { rankings: SiteRanking[] }) {
         >
           {/* Simplified coastline path */}
           <path
-            d="M82,95 C80,90 76,85 74,80 C72,76 70,73 69,70 C67,65 66,62 67,58 C68,53 70,50 71,46 C73,42 77,39 80,36 C78,32 75,28 73,24 C71,20 70,16 70,12"
+            d="M18,95 C20,90 24,85 26,80 C28,76 30,73 31,70 C33,65 34,62 33,58 C32,53 30,50 29,46 C27,42 23,39 20,36 C22,32 25,28 27,24 C29,20 30,16 30,12"
             fill="none"
             stroke="rgba(45,212,191,0.15)"
             strokeWidth="1"
@@ -309,7 +309,7 @@ function SiteMap({ rankings }: { rankings: SiteRanking[] }) {
           />
           {/* Ocean area hint */}
           <path
-            d="M82,95 C80,90 76,85 74,80 C72,76 70,73 69,70 C67,65 66,62 67,58 C68,53 70,50 71,46 C73,42 77,39 80,36 C78,32 75,28 73,24 C71,20 70,16 70,12 L100,12 L100,95 Z"
+            d="M18,95 C20,90 24,85 26,80 C28,76 30,73 31,70 C33,65 34,62 33,58 C32,53 30,50 29,46 C27,42 23,39 20,36 C22,32 25,28 27,24 C29,20 30,16 30,12 L0,12 L0,95 Z"
             fill="rgba(0,152,204,0.03)"
           />
           {/* Site dots and labels */}
@@ -327,9 +327,9 @@ function SiteMap({ rankings }: { rankings: SiteRanking[] }) {
                 <circle cx={site.x} cy={site.y} r={isTop ? 2.5 : 1.8} fill={dotColor} opacity={isTop ? 1 : 0.7} />
                 {/* Label */}
                 <text
-                  x={site.x - 4}
-                  y={site.y - 4}
-                  textAnchor="end"
+                  x={site.x + 5}
+                  y={site.y - 2}
+                  textAnchor="start"
                   className="fill-ocean-400"
                   style={{ fontSize: "3.2px", fontFamily: "system-ui" }}
                 >
@@ -338,8 +338,8 @@ function SiteMap({ rankings }: { rankings: SiteRanking[] }) {
                 {/* Rank badge */}
                 {ranking && (
                   <text
-                    x={site.x + 4}
-                    y={site.y + 1.2}
+                    x={site.x + 5}
+                    y={site.y + 2}
                     textAnchor="start"
                     style={{ fontSize: "3px", fontFamily: "system-ui", fontWeight: 700 }}
                     fill={dotColor}
