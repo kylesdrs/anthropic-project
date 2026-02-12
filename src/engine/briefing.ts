@@ -374,19 +374,32 @@ function generateRecommendation(
   const bestSite = rankings[0];
   const bestScore = bestSite?.diveScore.overall ?? 0;
 
+  // Use the best site's visibility (includes site-specific modifiers like
+  // swell direction shelter, depth bonus, estuary proximity) rather than
+  // the generic estimate. This prevents contradictory vis numbers in the
+  // recommendation text.
+  const siteVis: VisibilityEstimate | null = bestSite?.visibility
+    ? {
+        metres: bestSite.visibility.metres,
+        rating: bestSite.visibility.rating as VisibilityEstimate["rating"],
+        confidence: bestSite.visibility.confidence as VisibilityEstimate["confidence"],
+        factors: bestSite.visibility.factors,
+      }
+    : visibility;
+
   // Should we go?
   const go = bestScore >= 5;
 
   // Confidence in the recommendation
   let confidence: BriefingRecommendation["confidence"] = "medium";
-  if (visibility?.confidence === "high" && bestScore >= 7) {
+  if (siteVis?.confidence === "high" && bestScore >= 7) {
     confidence = "high";
-  } else if (visibility?.confidence === "low" || bestScore < 4) {
+  } else if (siteVis?.confidence === "low" || bestScore < 4) {
     confidence = "low";
   }
 
   // Summary
-  const summary = generateSummary(bestSite, bestScore, visibility, swell);
+  const summary = generateSummary(bestSite, bestScore, siteVis, swell);
 
   // Best time window
   const bestTimeWindow = suggestBestTime(weather, swell, timeOfDay);
@@ -394,7 +407,7 @@ function generateRecommendation(
   // Key factors
   const keyFactors = collectKeyFactors(
     bestSite,
-    visibility,
+    siteVis,
     weather,
     swell
   );
