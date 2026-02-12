@@ -31,18 +31,22 @@ export async function GET() {
 
     // Determine current time of day
     const hour = new Date().getHours();
-    let timeOfDay: "dawn" | "morning" | "midday" | "afternoon" | "dusk";
-    if (hour < 6) timeOfDay = "dawn";
+    let timeOfDay: "night" | "dawn" | "morning" | "midday" | "afternoon" | "dusk";
+    if (hour < 5) timeOfDay = "night";
+    else if (hour < 6) timeOfDay = "dawn";
     else if (hour < 10) timeOfDay = "morning";
     else if (hour < 14) timeOfDay = "midday";
     else if (hour < 17) timeOfDay = "afternoon";
-    else timeOfDay = "dusk";
+    else if (hour < 19) timeOfDay = "dusk";
+    else timeOfDay = "night";
 
+    const hasRealSharkData = sharkActivity.source === "live" || sharkActivity.source === "local";
     const rankings = rankSites(northernBeachesSites, {
       weather,
       swell,
       sharkActivity,
       timeOfDay,
+      hasRealSharkData,
     });
 
     return NextResponse.json({

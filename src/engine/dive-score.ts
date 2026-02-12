@@ -21,7 +21,7 @@ import type { DiveSite } from "../sites/northern-beaches";
 
 export interface DiveScoreInput {
   visibility: VisibilityEstimate;
-  sharkRisk: SharkRiskAssessment;
+  sharkRisk: SharkRiskAssessment | null;
   speciesScores: { speciesName: string; likelihood: SpeciesLikelihood }[];
   swell: SwellReading;
   windSpeed: number; // knots (sustained)
@@ -30,6 +30,7 @@ export interface DiveScoreInput {
   airTemp: number;
   waterTemp: number | null;
   site: DiveSite;
+  timeOfDay: "night" | "dawn" | "morning" | "midday" | "afternoon" | "dusk";
 }
 
 export interface DiveScore {
@@ -51,6 +52,22 @@ export interface DiveScore {
  * Calculate overall dive score (1-10).
  */
 export function calculateDiveScore(input: DiveScoreInput): DiveScore {
+  // Night check — can't dive if you can't see. Hard stop.
+  if (input.timeOfDay === "night") {
+    return {
+      overall: 1,
+      label: "Skip It",
+      breakdown: {
+        visibility: 1,
+        fishActivity: 1,
+        safety: 1,
+        comfort: 1,
+      },
+      topReasons: [],
+      concerns: ["Too dark to dive — no natural light"],
+    };
+  }
+
   const visScore = scoreVisibility(input.visibility);
   const fishScore = scoreFishActivity(input.speciesScores);
   const safetyScore = scoreSafety(input.sharkRisk, input.swell, input.site, input.windGust);
@@ -69,6 +86,13 @@ export function calculateDiveScore(input: DiveScoreInput): DiveScore {
     fishScore * 0.3 +
     safetyScore * 0.25 +
     comfortScore * 0.15;
+
+  // Sunlight penalty — dawn and dusk have reduced light
+  if (input.timeOfDay === "dusk") {
+    overall -= 1.5; // fading light, worse for spearfishing
+  } else if (input.timeOfDay === "dawn") {
+    overall -= 0.5; // low light, building
+  }
 
   // Vis-based cap: you can't have a good dive if you can't see.
   // Terrible vis (<1.5m) caps the score at 6 — no point being in the water.
@@ -140,26 +164,28 @@ function scoreFishActivity(
 }
 
 function scoreSafety(
-  sharkRisk: SharkRiskAssessment,
+  sharkRisk: SharkRiskAssessment | null,
   swell: SwellReading,
   site: DiveSite,
   windGust: number = 0
 ): number {
   let score = 10;
 
-  // Shark risk penalty
-  switch (sharkRisk.level) {
-    case "high":
-      score -= 5;
-      break;
-    case "elevated":
-      score -= 3;
-      break;
-    case "moderate":
-      score -= 1;
-      break;
-    case "low":
-      break;
+  // Shark risk penalty (only when real data is available)
+  if (sharkRisk) {
+    switch (sharkRisk.level) {
+      case "high":
+        score -= 5;
+        break;
+      case "elevated":
+        score -= 3;
+        break;
+      case "moderate":
+        score -= 1;
+        break;
+      case "low":
+        break;
+    }
   }
 
   // Swell penalty (relative to site max)
@@ -263,6 +289,11 @@ function scoreLabel(score: number): string {
 function collectReasons(input: DiveScoreInput): string[] {
   const reasons: string[] = [];
 
+  // Sunlight
+  if (input.timeOfDay === "midday" || input.timeOfDay === "morning") {
+    reasons.push("Good daylight");
+  }
+
   // Visibility
   if (input.visibility.metres >= 12) {
     reasons.push(`Excellent vis (${input.visibility.metres}m)`);
@@ -282,11 +313,6 @@ function collectReasons(input: DiveScoreInput): string[] {
     );
   }
 
-  // Safety
-  if (input.sharkRisk.level === "low") {
-    reasons.push("Low shark risk");
-  }
-
   // Wind
   if (
     input.windSpeed < 10 &&
@@ -301,6 +327,13 @@ function collectReasons(input: DiveScoreInput): string[] {
 function collectConcerns(input: DiveScoreInput): string[] {
   const concerns: string[] = [];
 
+  // Sunlight concerns
+  if (input.timeOfDay === "dusk") {
+    concerns.push("Fading light — reduced visibility and harder to spot fish");
+  } else if (input.timeOfDay === "dawn") {
+    concerns.push("Low light — still building to usable daylight");
+  }
+
   if (input.visibility.metres < 3) {
     concerns.push(`Terrible vis (${input.visibility.metres}m) — can't see fish`);
   } else if (input.visibility.metres < 6) {
@@ -308,8 +341,9 @@ function collectConcerns(input: DiveScoreInput): string[] {
   }
 
   if (
-    input.sharkRisk.level === "elevated" ||
-    input.sharkRisk.level === "high"
+    input.sharkRisk &&
+    (input.sharkRisk.level === "elevated" ||
+    input.sharkRisk.level === "high")
   ) {
     concerns.push(`${input.sharkRisk.level} shark risk`);
   }

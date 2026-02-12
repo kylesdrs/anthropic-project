@@ -22,11 +22,13 @@ function daysAgo(d: number): string {
 
 function getTimeOfDay(): string {
   const h = new Date().getHours();
+  if (h < 5) return "night";
   if (h < 6) return "dawn";
   if (h < 10) return "morning";
   if (h < 14) return "midday";
   if (h < 17) return "afternoon";
-  return "dusk";
+  if (h < 19) return "dusk";
+  return "night";
 }
 
 function generateTidePredictions() {
@@ -118,42 +120,9 @@ export function generateMockBriefing() {
         fetchedAt: new Date().toISOString(),
       },
       sharkActivity: {
-        alerts: [
-          {
-            id: "mock-001",
-            date: daysAgo(1),
-            type: "tagged_detection",
-            species: "white",
-            location: { lat: -33.7404, lng: 151.3235, beach: "Long Reef" },
-            details: "Tagged white shark (2.8m) detected at Long Reef listening station. Heading south.",
-          },
-          {
-            id: "mock-002",
-            date: daysAgo(2),
-            type: "drone_sighting",
-            species: "unknown",
-            location: { lat: -33.7495, lng: 151.312, beach: "Dee Why" },
-            details: "Shark (~2m) spotted by Westpac Lifesaver drone 150m offshore. Beach cleared for 1 hour.",
-          },
-          {
-            id: "mock-003",
-            date: daysAgo(3),
-            type: "drumline_catch",
-            species: "bull",
-            location: { lat: -33.737, lng: 151.3245, beach: "Long Reef North" },
-            details: "Bull shark (1.9m) caught on SMART drumline. Tagged and released 1km offshore.",
-          },
-          {
-            id: "mock-004",
-            date: daysAgo(5),
-            type: "aerial_sighting",
-            species: "white",
-            location: { lat: -33.7097, lng: 151.316, beach: "Narrabeen" },
-            details: "White shark (3m+) spotted by DPI aerial patrol 200m off Narrabeen headland.",
-          },
-        ],
-        daysSinceLastActivity: 1,
-        source: "mock",
+        alerts: [],
+        daysSinceLastActivity: null,
+        source: "seed",
         fetchedAt: new Date().toISOString(),
       },
     },

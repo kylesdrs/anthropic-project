@@ -35,7 +35,7 @@ export interface DataSourceStatus {
 export interface DiveBriefing {
   generatedAt: string;
   forecastHour: number | null; // null = current conditions, 0-23 = forecast for that AEST hour
-  timeOfDay: "dawn" | "morning" | "midday" | "afternoon" | "dusk";
+  timeOfDay: "night" | "dawn" | "morning" | "midday" | "afternoon" | "dusk";
   dataStatus: DataSourceStatus;
   conditions: {
     weather: WeatherConditions | null;
@@ -60,13 +60,15 @@ export interface BriefingRecommendation {
 
 function getTimeOfDay(
   hour?: number
-): "dawn" | "morning" | "midday" | "afternoon" | "dusk" {
+): "night" | "dawn" | "morning" | "midday" | "afternoon" | "dusk" {
   const h = hour ?? new Date().getHours();
-  if (h < 6) return "dawn";
-  if (h < 10) return "morning";
-  if (h < 14) return "midday";
-  if (h < 17) return "afternoon";
-  return "dusk";
+  if (h < 5) return "night";     // 0-4: pitch dark
+  if (h < 6) return "dawn";      // 5: pre-sunrise twilight
+  if (h < 10) return "morning";  // 6-9: good daylight
+  if (h < 14) return "midday";   // 10-13: peak daylight
+  if (h < 17) return "afternoon"; // 14-16: good daylight
+  if (h < 19) return "dusk";     // 17-18: sunset / fading light
+  return "night";                 // 19-23: dark
 }
 
 // --- Main generator ---
@@ -92,6 +94,8 @@ export async function generateBriefing(options?: {
   ]);
 
   // Track which data sources are available
+  // Seed shark data is generated placeholder data, not real observations
+  const hasRealSharkData = sharkActivity.source === "live" || sharkActivity.source === "local";
   const dataStatus: DataSourceStatus = {
     weather: {
       available: weather !== null,
@@ -102,8 +106,8 @@ export async function generateBriefing(options?: {
       source: swell?.source ?? "unavailable",
     },
     shark: {
-      available: true,
-      source: sharkActivity.source,
+      available: hasRealSharkData,
+      source: hasRealSharkData ? sharkActivity.source : "unavailable",
     },
   };
 
@@ -157,6 +161,7 @@ export async function generateBriefing(options?: {
       swell,
       sharkActivity,
       timeOfDay,
+      hasRealSharkData,
     });
   }
 
@@ -306,6 +311,18 @@ function generateRecommendation(
   swell: SwellConditions | null,
   timeOfDay: string
 ): BriefingRecommendation {
+  // Night time — no diving possible
+  if (timeOfDay === "night") {
+    return {
+      go: false,
+      confidence: "high",
+      summary: "Too dark to dive. No natural light — spearfishing is not possible at this hour.",
+      bestSite: "None",
+      bestTimeWindow: "Wait for daylight — earliest safe diving is around dawn (5-6am)",
+      keyFactors: ["No natural light — cannot see underwater"],
+    };
+  }
+
   // If critical data is missing, we can't make a recommendation
   if (!weather || !swell) {
     const missing: string[] = [];

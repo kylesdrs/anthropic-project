@@ -68,7 +68,8 @@ export interface RankingInput {
   weather: WeatherConditions;
   swell: SwellConditions;
   sharkActivity: SharkActivitySummary;
-  timeOfDay: "dawn" | "morning" | "midday" | "afternoon" | "dusk";
+  timeOfDay: "night" | "dawn" | "morning" | "midday" | "afternoon" | "dusk";
+  hasRealSharkData: boolean;
 }
 
 // --- Ranking ---
@@ -143,21 +144,24 @@ export function rankSites(
       })
       .sort((a, b) => b.likelihood.score - a.likelihood.score);
 
-    // 5. Shark risk
-    const nearEstuary =
-      site.id === "dee-why-head" || site.id === "narrabeen-head";
-    const drumlines = nearbyDrumlines(site.lat, site.lng, 3);
+    // 5. Shark risk (only when real data is available)
+    let sharkRisk: ReturnType<typeof assessSharkRisk> | null = null;
+    if (input.hasRealSharkData) {
+      const nearEstuary =
+        site.id === "dee-why-head" || site.id === "narrabeen-head";
+      const drumlines = nearbyDrumlines(site.lat, site.lng, 3);
 
-    const sharkRisk = assessSharkRisk({
-      sharkActivity: input.sharkActivity,
-      daysSinceSignificantRain: input.weather.rainfall.daysSinceSignificantRain,
-      rainfallLast24h: input.weather.rainfall.last24h,
-      estimatedVis: visEstimate.metres,
-      timeOfDay: input.timeOfDay,
-      month,
-      nearEstuary,
-      drumlinesCoveringSite: drumlines.length,
-    });
+      sharkRisk = assessSharkRisk({
+        sharkActivity: input.sharkActivity,
+        daysSinceSignificantRain: input.weather.rainfall.daysSinceSignificantRain,
+        rainfallLast24h: input.weather.rainfall.last24h,
+        estimatedVis: visEstimate.metres,
+        timeOfDay: input.timeOfDay,
+        month,
+        nearEstuary,
+        drumlinesCoveringSite: drumlines.length,
+      });
+    }
 
     // 6. Overall dive score
     const diveScore = calculateDiveScore({
@@ -174,6 +178,7 @@ export function rankSites(
       airTemp: input.weather.observation.airTemp,
       waterTemp: input.weather.seaSurfaceTemp,
       site,
+      timeOfDay: input.timeOfDay,
     });
 
     // 7. Warnings
@@ -195,11 +200,13 @@ export function rankSites(
         confidence: visEstimate.confidence,
         factors: visEstimate.factors,
       },
-      sharkRisk: {
-        level: sharkRisk.level,
-        score: sharkRisk.score,
-        recommendation: sharkRisk.recommendation,
-      },
+      sharkRisk: sharkRisk
+        ? {
+            level: sharkRisk.level,
+            score: sharkRisk.score,
+            recommendation: sharkRisk.recommendation,
+          }
+        : { level: "unknown", score: 0, recommendation: "No shark data available" },
       topSpecies,
       warnings,
       explanation,
@@ -269,7 +276,7 @@ function generateScoreExplanation(
   fit: ConditionsFit,
   vis: { metres: number; rating: string; factors?: { name: string; impact: number; description: string }[] },
   topSpecies: SiteSpecies[],
-  sharkRisk: { level: string; score: number }
+  sharkRisk: { level: string; score: number } | null
 ): string {
   const parts: string[] = [];
   const score = diveScore.overall;
@@ -277,11 +284,23 @@ function generateScoreExplanation(
   const wind = input.weather.observation;
   const tide = input.weather.tides;
 
+  // Night — short-circuit explanation
+  if (input.timeOfDay === "night") {
+    return `${site.name} scores ${score}/10 — it's dark. You can't spearfish without natural light. Wait for daylight.`;
+  }
+
   // Opening — score context
   const label = diveScore.label.toLowerCase();
   parts.push(
     `${site.name} scores ${score}/10 (${diveScore.label}) today.`
   );
+
+  // Sunlight context
+  if (input.timeOfDay === "dusk") {
+    parts.push("Light is fading — you'll have limited time before it's too dark to dive safely.");
+  } else if (input.timeOfDay === "dawn") {
+    parts.push("Early light — visibility will improve as the sun comes up.");
+  }
 
   // Swell explanation
   if (fit.swellOk) {
@@ -358,13 +377,15 @@ function generateScoreExplanation(
     );
   }
 
-  // Shark risk (only if notable)
-  if (sharkRisk.level === "elevated" || sharkRisk.level === "high") {
-    parts.push(
-      `Shark risk is ${sharkRisk.level} — worth factoring into your decision.`
-    );
-  } else if (sharkRisk.level === "low") {
-    parts.push(`Shark risk is low.`);
+  // Shark risk (only when real data is available)
+  if (sharkRisk) {
+    if (sharkRisk.level === "elevated" || sharkRisk.level === "high") {
+      parts.push(
+        `Shark risk is ${sharkRisk.level} — worth factoring into your decision.`
+      );
+    } else if (sharkRisk.level === "low") {
+      parts.push(`Shark risk is low.`);
+    }
   }
 
   // Rain context (if significant)
@@ -388,9 +409,16 @@ function generateWarnings(
   site: DiveSite,
   input: RankingInput,
   fit: ConditionsFit,
-  sharkRisk: { level: string }
+  sharkRisk: { level: string } | null
 ): string[] {
   const warnings: string[] = [];
+
+  // Night time warning
+  if (input.timeOfDay === "night") {
+    warnings.push("Too dark to dive — no natural light");
+  } else if (input.timeOfDay === "dusk") {
+    warnings.push("Fading light — limited time before dark");
+  }
 
   if (!fit.swellOk) {
     warnings.push(
@@ -403,8 +431,9 @@ function generateWarnings(
   }
 
   if (
-    sharkRisk.level === "elevated" ||
-    sharkRisk.level === "high"
+    sharkRisk &&
+    (sharkRisk.level === "elevated" ||
+    sharkRisk.level === "high")
   ) {
     warnings.push(`${sharkRisk.level} shark risk at this location`);
   }

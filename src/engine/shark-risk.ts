@@ -27,7 +27,7 @@ export interface SharkRiskInput {
   daysSinceSignificantRain: number;
   rainfallLast24h: number;
   estimatedVis: number; // metres
-  timeOfDay: "dawn" | "morning" | "midday" | "afternoon" | "dusk";
+  timeOfDay: "night" | "dawn" | "morning" | "midday" | "afternoon" | "dusk";
   month: number;
   nearEstuary: boolean;
   drumlinesCoveringSite: number; // count of nearby active drumlines
@@ -256,6 +256,13 @@ function assessTimeRisk(
 ): SharkRiskFactor {
   // Dawn and dusk are higher risk — sharks feed actively in low light
   switch (timeOfDay) {
+    case "night":
+      return {
+        name: "Time of Day",
+        points: 10,
+        description:
+          "Night — zero visibility. Diving is not feasible.",
+      };
     case "dawn":
       return {
         name: "Time of Day",

@@ -26,7 +26,7 @@ export interface SpeciesConditions {
   waterTemp: number;
   estimatedVis: number;
   currentStrength: "none" | "light" | "moderate" | "strong";
-  timeOfDay: "dawn" | "morning" | "midday" | "afternoon" | "dusk";
+  timeOfDay: "night" | "dawn" | "morning" | "midday" | "afternoon" | "dusk";
   siteStructure: string[];
   depth: number;
 }
@@ -304,7 +304,10 @@ export function calculateSpeciesLikelihood(
   }
 
   // --- Time of day (up to ±10) ---
-  if (species.timeOfDay.includes(conditions.timeOfDay)) {
+  if (conditions.timeOfDay === "night") {
+    score -= 30;
+    reasons.push("Night — too dark to see or target any species");
+  } else if (species.timeOfDay.includes(conditions.timeOfDay)) {
     score += 10;
     reasons.push(`${conditions.timeOfDay} is a good time for this species`);
   } else {
