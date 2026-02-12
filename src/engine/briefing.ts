@@ -132,6 +132,7 @@ export async function generateBriefing(options?: {
     visibility = estimateVisibility({
       rainfall: weather.rainfall,
       swell: swell.current,
+      swellTrend: swell.trend,
       windDirection: weather.observation.windDirection,
       windSpeed: weather.observation.windSpeed,
       tides: weather.tides,

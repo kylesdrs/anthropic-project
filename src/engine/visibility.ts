@@ -24,6 +24,7 @@ import type { DiveSite } from "../sites/northern-beaches";
 export interface VisibilityInput {
   rainfall: RainfallData;
   swell: SwellReading;
+  swellTrend?: "building" | "holding" | "dropping";
   windDirection: string;
   windSpeed: number; // knots
   tides: TideData;
@@ -46,7 +47,7 @@ export interface VisibilityFactor {
 
 // --- Constants ---
 
-const BASELINE_VIS = 7; // metres — Northern Beaches average
+const BASELINE_VIS = 6; // metres — Northern Beaches realistic average
 const MIN_VIS = 0.5;
 const MAX_VIS = 20;
 
@@ -68,7 +69,7 @@ export function estimateVisibility(
   factors.push(rainImpact);
 
   // --- 2. Swell impact ---
-  const swellImpact = calculateSwellImpact(input.swell);
+  const swellImpact = calculateSwellImpact(input.swell, input.swellTrend);
   vis += swellImpact.impact;
   factors.push(swellImpact);
 
@@ -152,33 +153,47 @@ function calculateRainImpact(rainfall: RainfallData): VisibilityFactor {
   return { name: "Rainfall", impact, description };
 }
 
-function calculateSwellImpact(swell: SwellReading): VisibilityFactor {
+function calculateSwellImpact(
+  swell: SwellReading,
+  trend?: "building" | "holding" | "dropping"
+): VisibilityFactor {
   const { height, period } = swell;
   const swellType = classifySwellType(period);
 
   let impact = 0;
   let description: string;
 
-  // Big swell stirs up sediment, especially short-period wind chop
+  // Wind chop is much worse for vis than clean groundswell at same height
   if (height >= 2.5) {
-    // Big swell regardless of type
-    impact = swellType === "wind-chop" ? -4 : -2.5;
-    description = `Large ${height}m ${swellType} — stirring up the bottom significantly`;
+    impact = swellType === "wind-chop" ? -5 : -3;
+    description = `Large ${height}m ${swellType} — heavy bottom disturbance, vis will be poor`;
   } else if (height >= 1.5) {
-    impact = swellType === "wind-chop" ? -2.5 : -1;
-    description = `${height}m ${swellType} — moderate bottom disturbance`;
+    impact = swellType === "wind-chop" ? -3.5 : -1.5;
+    description = `${height}m ${swellType} — significant turbidity`;
   } else if (height >= 1.0) {
-    impact = swellType === "wind-chop" ? -1 : 0;
+    impact = swellType === "wind-chop" ? -2 : -0.5;
     description =
       swellType === "wind-chop"
-        ? `${height}m wind chop — some surface disturbance`
-        : `${height}m ${swellType} — manageable`;
-  } else if (height < 0.5) {
-    impact = 1.5;
-    description = `Small ${height}m swell — minimal disturbance, vis improving`;
+        ? `${height}m wind chop (${period}s) — messy surface, reduced vis`
+        : `${height}m ${swellType} — some disturbance`;
+  } else if (height >= 0.5) {
+    impact = swellType === "wind-chop" ? -0.5 : 0.5;
+    description =
+      swellType === "wind-chop"
+        ? `Light ${height}m wind chop — slight surface disturbance`
+        : `Light ${height}m swell — good conditions`;
   } else {
-    impact = 0.5;
-    description = `Light ${height}m swell — good conditions`;
+    impact = 1;
+    description = `Small ${height}m swell — minimal disturbance`;
+  }
+
+  // Building swell means conditions are deteriorating even before height peaks
+  if (trend === "building") {
+    impact -= 1;
+    description += ". Swell building — water already churning up";
+  } else if (trend === "dropping") {
+    impact += 0.5;
+    description += ". Swell dropping — conditions improving";
   }
 
   return { name: "Swell", impact, description };
@@ -188,10 +203,10 @@ function calculateWindImpact(
   direction: string,
   speed: number
 ): VisibilityFactor {
-  // Offshore wind (W/NW/SW) flattens the surface and pushes surface water out
-  // bringing cleaner water up from below. Onshore (E/NE/SE) does the opposite.
-  const offshore = ["W", "WSW", "SW", "WNW", "NW", "NNW"];
-  const onshore = ["E", "ESE", "SE", "NE", "ENE", "SSE"];
+  // Offshore wind (W/NW/SW/SSW) flattens the surface and pushes water out.
+  // Onshore (E/NE/SE/SSE) pushes turbid water inshore and creates chop.
+  const offshore = ["W", "WSW", "SW", "SSW", "WNW", "NW", "NNW"];
+  const onshore = ["E", "ESE", "SE", "SSE", "NE", "ENE"];
 
   let impact = 0;
   let description: string;
@@ -200,25 +215,39 @@ function calculateWindImpact(
     impact = 0.5;
     description = "Very light wind — calm surface conditions";
   } else if (offshore.includes(direction)) {
-    if (speed >= 15) {
-      impact = 2;
-      description = `Strong offshore ${direction} ${speed}kt — pushing surface layer out, cleaner water upwelling`;
-    } else {
+    if (speed >= 20) {
+      impact = 1;
+      description = `Strong offshore ${direction} ${speed}kt — cleaning surface but strong wind creates some chop`;
+    } else if (speed >= 10) {
       impact = 1.5;
-      description = `Offshore ${direction} ${speed}kt — flattening surface, improving vis`;
+      description = `Moderate offshore ${direction} ${speed}kt — flattening surface, improving vis`;
+    } else {
+      impact = 1;
+      description = `Light offshore ${direction} ${speed}kt — slightly improving conditions`;
     }
   } else if (onshore.includes(direction)) {
-    if (speed >= 15) {
-      impact = -2;
-      description = `Strong onshore ${direction} ${speed}kt — pushing turbid water inshore`;
+    if (speed >= 20) {
+      impact = -3;
+      description = `Strong onshore ${direction} ${speed}kt — heavy chop, pushing dirty water inshore`;
+    } else if (speed >= 10) {
+      impact = -1.5;
+      description = `Moderate onshore ${direction} ${speed}kt — surface chop and turbidity`;
     } else {
-      impact = -1;
-      description = `Onshore ${direction} ${speed}kt — some surface chop and turbidity`;
+      impact = -0.5;
+      description = `Light onshore ${direction} ${speed}kt — slight surface disturbance`;
     }
   } else {
-    // N or S — cross shore
-    impact = speed >= 15 ? -0.5 : 0;
-    description = `Cross-shore ${direction} ${speed}kt — minimal vis effect`;
+    // N or S — cross shore, still creates chop at higher speeds
+    if (speed >= 20) {
+      impact = -1.5;
+      description = `Strong ${direction} ${speed}kt — cross-shore but creating significant chop`;
+    } else if (speed >= 10) {
+      impact = -0.5;
+      description = `Moderate ${direction} ${speed}kt — some surface disturbance`;
+    } else {
+      impact = 0;
+      description = `Light ${direction} ${speed}kt — minimal vis effect`;
+    }
   }
 
   return { name: "Wind", impact, description };
@@ -342,9 +371,9 @@ function determineConfidence(input: VisibilityInput): VisibilityEstimate["confid
 }
 
 function visRating(metres: number): VisibilityEstimate["rating"] {
-  if (metres >= 12) return "excellent";
-  if (metres >= 8) return "good";
-  if (metres >= 5) return "fair";
+  if (metres >= 10) return "excellent";
+  if (metres >= 6) return "good";
+  if (metres >= 4) return "fair";
   if (metres >= 2) return "poor";
   return "terrible";
 }
