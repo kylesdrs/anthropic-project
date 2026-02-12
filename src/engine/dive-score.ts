@@ -12,6 +12,7 @@
  */
 
 import type { VisibilityEstimate } from "./visibility";
+import { parseCloudCover } from "./visibility";
 import type { SharkRiskAssessment } from "./shark-risk";
 import type { SpeciesLikelihood } from "./species";
 import type { SwellReading } from "../data/swell";
@@ -31,6 +32,7 @@ export interface DiveScoreInput {
   waterTemp: number | null;
   site: DiveSite;
   timeOfDay: "night" | "dawn" | "morning" | "midday" | "afternoon" | "dusk";
+  cloud?: string; // BOM cloud description e.g. "Overcast", "Partly cloudy"
 }
 
 export interface DiveScore {
@@ -92,6 +94,16 @@ export function calculateDiveScore(input: DiveScoreInput): DiveScore {
     overall -= 1.5; // fading light, worse for spearfishing
   } else if (input.timeOfDay === "dawn") {
     overall -= 0.5; // low light, building
+  }
+
+  // Cloud cover penalty — overcast skies reduce underwater light
+  if (input.cloud) {
+    const oktas = parseCloudCover(input.cloud);
+    if (oktas >= 7) {
+      overall -= 0.8; // heavy overcast — significantly less light underwater
+    } else if (oktas >= 5) {
+      overall -= 0.3; // mostly cloudy — noticeable reduction
+    }
   }
 
   // Vis-based cap: you can't have a good dive if you can't see.
@@ -289,8 +301,12 @@ function scoreLabel(score: number): string {
 function collectReasons(input: DiveScoreInput): string[] {
   const reasons: string[] = [];
 
-  // Sunlight
-  if (input.timeOfDay === "midday" || input.timeOfDay === "morning") {
+  // Sunlight — only claim good daylight if it's actually sunny
+  const cloudOktas = input.cloud ? parseCloudCover(input.cloud) : 0;
+  if (
+    (input.timeOfDay === "midday" || input.timeOfDay === "morning") &&
+    cloudOktas < 6
+  ) {
     reasons.push("Good daylight");
   }
 
@@ -332,6 +348,12 @@ function collectConcerns(input: DiveScoreInput): string[] {
     concerns.push("Fading light — reduced visibility and harder to spot fish");
   } else if (input.timeOfDay === "dawn") {
     concerns.push("Low light — still building to usable daylight");
+  }
+
+  // Cloud cover concerns
+  const concernCloudOktas = input.cloud ? parseCloudCover(input.cloud) : 0;
+  if (concernCloudOktas >= 7) {
+    concerns.push(`Overcast (${input.cloud}) — poor light for spotting fish`);
   }
 
   if (input.visibility.metres < 3) {

@@ -39,12 +39,19 @@ export interface WindForecastPoint {
   directionDeg: number;
 }
 
+export interface WeatherForecastPoint {
+  timestamp: string;
+  precis: string; // e.g. "Showers", "Cloudy", "Mostly Sunny"
+  rainProbability?: number; // 0-100
+}
+
 export interface SwellConditions {
   current: SwellReading;
   secondary: SwellReading | null;
   trend: "building" | "holding" | "dropping";
   forecast: SwellForecastPoint[];
   windForecast: WindForecastPoint[];
+  weatherForecast: WeatherForecastPoint[];
   source: "willyweather" | "open-meteo" | "bom-buoy" | "unavailable";
   fetchedAt: string;
 }
@@ -131,7 +138,7 @@ async function fetchFromWillyweather(): Promise<SwellConditions | null> {
   }
 
   try {
-    const url = `${WILLYWEATHER_BASE}/${apiKey}/locations/${WILLYWEATHER_LOCATION_ID}/weather.json?forecasts=swell,wind&days=3`;
+    const url = `${WILLYWEATHER_BASE}/${apiKey}/locations/${WILLYWEATHER_LOCATION_ID}/weather.json?forecasts=swell,wind,weather,rainfallprobability&days=3`;
     const res = await fetch(url, { cache: "no-store" });
 
     if (!res.ok) {
@@ -161,6 +168,23 @@ async function fetchFromWillyweather(): Promise<SwellConditions | null> {
               gustSpeed: number;
               direction: number;
               directionText: string;
+            }[];
+          }[];
+        };
+        weather?: {
+          days?: {
+            entries?: {
+              dateTime: string;
+              precisCode: string; // e.g. "showers", "cloudy", "mostly-sunny"
+              precis: string; // e.g. "Showers", "Cloudy", "Mostly Sunny"
+            }[];
+          }[];
+        };
+        rainfallprobability?: {
+          days?: {
+            entries?: {
+              dateTime: string;
+              probability: number; // 0-100
             }[];
           }[];
         };
@@ -230,12 +254,29 @@ async function fetchFromWillyweather(): Promise<SwellConditions | null> {
       }))
     );
 
+    // Parse weather forecast (precis + rain probability)
+    const weatherDays = data.forecasts?.weather?.days ?? [];
+    const allWeatherEntries = weatherDays.flatMap((d) => d.entries ?? []);
+    const rainDays = data.forecasts?.rainfallprobability?.days ?? [];
+    const allRainEntries = rainDays.flatMap((d) => d.entries ?? []);
+
+    const weatherForecast: WeatherForecastPoint[] = allWeatherEntries.map((e) => {
+      // Find matching rain probability entry
+      const rainEntry = allRainEntries.find((r) => r.dateTime === e.dateTime);
+      return {
+        timestamp: e.dateTime,
+        precis: e.precis,
+        rainProbability: rainEntry?.probability,
+      };
+    });
+
     return {
       current,
       secondary: null,
       trend,
       forecast,
       windForecast,
+      weatherForecast,
       source: "willyweather" as const,
       fetchedAt: new Date().toISOString(),
     };
@@ -343,6 +384,7 @@ async function fetchFromOpenMeteo(): Promise<SwellConditions | null> {
       trend,
       forecast,
       windForecast: [], // Open-Meteo marine doesn't include wind speed in knots
+      weatherForecast: [],
       source: "open-meteo" as const,
       fetchedAt: new Date().toISOString(),
     };
@@ -405,6 +447,7 @@ async function fetchFromBomBuoy(): Promise<SwellConditions | null> {
       trend,
       forecast: [], // no forecast from buoy data
       windForecast: [],
+      weatherForecast: [],
       source: "bom-buoy" as const,
       fetchedAt: new Date().toISOString(),
     };

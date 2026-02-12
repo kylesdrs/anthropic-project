@@ -117,6 +117,7 @@ export function generateMockBriefing() {
           directionDeg: 155,
         })),
         windForecast: [],
+        weatherForecast: [],
         fetchedAt: new Date().toISOString(),
       },
       sharkActivity: {

@@ -180,6 +180,7 @@ export async function generateBriefing(options?: {
       tides: weather.tides,
       month,
       seaSurfaceTemp: weather.seaSurfaceTemp,
+      cloud: weather.observation.cloud,
     });
   }
 

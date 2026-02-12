@@ -13,7 +13,7 @@ import type { WeatherConditions } from "../data/bom";
 import type { SwellConditions } from "../data/swell";
 import type { SharkActivitySummary } from "../data/sharksmart";
 import { nearbyDrumlines } from "../data/sharksmart";
-import { estimateVisibility, estimateCurrentStrength } from "./visibility";
+import { estimateVisibility, estimateCurrentStrength, parseCloudCover } from "./visibility";
 import { assessSharkRisk } from "./shark-risk";
 import {
   calculateSpeciesLikelihood,
@@ -99,6 +99,7 @@ export function rankSites(
         tides: input.weather.tides,
         month,
         seaSurfaceTemp: input.weather.seaSurfaceTemp,
+        cloud: input.weather.observation.cloud,
       },
       site
     );
@@ -179,6 +180,7 @@ export function rankSites(
       waterTemp: input.weather.seaSurfaceTemp,
       site,
       timeOfDay: input.timeOfDay,
+      cloud: input.weather.observation.cloud,
     });
 
     // 7. Warnings
@@ -300,6 +302,13 @@ function generateScoreExplanation(
     parts.push("Light is fading — you'll have limited time before it's too dark to dive safely.");
   } else if (input.timeOfDay === "dawn") {
     parts.push("Early light — visibility will improve as the sun comes up.");
+  } else if (input.weather.observation.cloud) {
+    const oktas = parseCloudCover(input.weather.observation.cloud);
+    if (oktas >= 7) {
+      parts.push(`Overcast skies (${input.weather.observation.cloud}) — reduced light penetration underwater, harder to spot fish.`);
+    } else if (oktas >= 5) {
+      parts.push(`Mostly cloudy (${input.weather.observation.cloud}) — less light than ideal for spotting fish.`);
+    }
   }
 
   // Swell explanation

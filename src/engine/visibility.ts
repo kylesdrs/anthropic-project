@@ -31,6 +31,7 @@ export interface VisibilityInput {
   tides: TideData;
   month: number; // 1-12
   seaSurfaceTemp: number | null;
+  cloud?: string; // BOM cloud description e.g. "Overcast", "Partly cloudy", "Clear"
 }
 
 export interface VisibilityEstimate {
@@ -107,7 +108,14 @@ export function estimateVisibility(
   vis += seasonImpact.impact;
   factors.push(seasonImpact);
 
-  // --- 6. Site-specific modifiers ---
+  // --- 6. Cloud cover (affects light penetration underwater) ---
+  if (input.cloud) {
+    const cloudImpact = calculateCloudImpact(input.cloud);
+    vis += cloudImpact.impact;
+    factors.push(cloudImpact);
+  }
+
+  // --- 7. Site-specific modifiers ---
   if (site) {
     const siteImpact = calculateSiteModifier(site, input.rainfall);
     vis += siteImpact.impact;
@@ -433,6 +441,51 @@ function calculateSeasonImpact(
   }
 
   return { name: "Season", impact, description };
+}
+
+/**
+ * Parse BOM cloud description into an oktas-style 0-8 scale.
+ * BOM reports strings like "Clear", "Partly cloudy", "Mostly cloudy",
+ * "Cloudy", "Overcast", or sometimes numeric oktas.
+ */
+export function parseCloudCover(cloud: string): number {
+  const lower = cloud.toLowerCase().trim();
+  if (!lower || lower === "clear" || lower === "sunny") return 0;
+  if (lower === "mostly sunny" || lower === "mostly clear") return 2;
+  if (lower === "partly cloudy" || lower === "partly sunny") return 4;
+  if (lower === "mostly cloudy") return 6;
+  if (lower === "cloudy" || lower === "overcast") return 8;
+  if (lower.includes("shower") || lower.includes("rain") || lower.includes("storm")) return 8;
+  // Fallback: try to extract oktas number
+  const num = parseInt(lower);
+  if (!isNaN(num) && num >= 0 && num <= 8) return num;
+  return 4; // unknown — assume partial
+}
+
+function calculateCloudImpact(cloud: string): VisibilityFactor {
+  // Heavy cloud cover reduces light penetration underwater.
+  // In murky water this reduces effective vis by ~20-30%.
+  // In clear water the effect is smaller but still noticeable.
+  const oktas = parseCloudCover(cloud);
+
+  let impact = 0;
+  let description: string;
+
+  if (oktas >= 7) {
+    impact = -1;
+    description = `Overcast skies (${cloud}) — reduced light penetration, harder to see underwater`;
+  } else if (oktas >= 5) {
+    impact = -0.5;
+    description = `Mostly cloudy (${cloud}) — less light reaching the water`;
+  } else if (oktas <= 2) {
+    impact = 0.5;
+    description = `Clear skies (${cloud}) — good light penetration underwater`;
+  } else {
+    impact = 0;
+    description = `Partly cloudy (${cloud}) — moderate light conditions`;
+  }
+
+  return { name: "Cloud Cover", impact, description };
 }
 
 function calculateSiteModifier(
