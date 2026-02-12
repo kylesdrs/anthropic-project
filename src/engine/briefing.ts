@@ -29,6 +29,7 @@ export interface DataSourceStatus {
 
 export interface DiveBriefing {
   generatedAt: string;
+  forecastHour: number | null; // null = current conditions, 0-23 = forecast for that AEST hour
   timeOfDay: "dawn" | "morning" | "midday" | "afternoon" | "dusk";
   dataStatus: DataSourceStatus;
   conditions: {
@@ -101,6 +102,29 @@ export async function generateBriefing(options?: {
     },
   };
 
+  // If a specific hour is requested, override current swell/wind with forecast data
+  const forecastHour = options?.hour;
+  if (forecastHour !== undefined && swell) {
+    const forecastSwell = findForecastForHour(swell.forecast, forecastHour);
+    if (forecastSwell) {
+      swell.current = {
+        timestamp: forecastSwell.timestamp,
+        height: forecastSwell.height,
+        period: forecastSwell.period,
+        direction: forecastSwell.direction,
+        directionDeg: forecastSwell.directionDeg,
+      };
+    }
+    if (weather && swell.windForecast.length > 0) {
+      const forecastWind = findForecastForHour(swell.windForecast, forecastHour);
+      if (forecastWind) {
+        weather.observation.windDirection = forecastWind.direction;
+        weather.observation.windSpeed = forecastWind.speed;
+        weather.observation.windDirectionDeg = forecastWind.directionDeg;
+      }
+    }
+  }
+
   // General visibility estimate (only if we have the required data)
   let visibility: VisibilityEstimate | null = null;
   if (weather && swell) {
@@ -138,6 +162,7 @@ export async function generateBriefing(options?: {
 
   return {
     generatedAt: new Date().toISOString(),
+    forecastHour: forecastHour ?? null,
     timeOfDay,
     dataStatus,
     conditions: {
@@ -149,6 +174,41 @@ export async function generateBriefing(options?: {
     siteRankings,
     recommendation,
   };
+}
+
+// --- Forecast hour helper ---
+
+/**
+ * Find the forecast entry closest to the given AEST hour (0-23) for today.
+ * Willyweather timestamps are in AEST format: "2026-02-12 14:00:00"
+ */
+function findForecastForHour<T extends { timestamp: string }>(
+  entries: T[],
+  targetHour: number
+): T | null {
+  if (entries.length === 0) return null;
+
+  // Build target date in AEST: today at the requested hour
+  const now = new Date();
+  // Convert to AEST (UTC+11)
+  const aestNow = new Date(now.getTime() + 11 * 60 * 60 * 1000);
+  const todayStr = aestNow.toISOString().slice(0, 10); // "2026-02-12"
+  const targetStr = `${todayStr} ${String(targetHour).padStart(2, "0")}:00:00`;
+
+  // Find closest entry
+  let closest = entries[0];
+  let closestDiff = Infinity;
+  for (const entry of entries) {
+    const diff = Math.abs(
+      new Date(entry.timestamp.replace(" ", "T") + "+11:00").getTime() -
+      new Date(targetStr.replace(" ", "T") + "+11:00").getTime()
+    );
+    if (diff < closestDiff) {
+      closestDiff = diff;
+      closest = entry;
+    }
+  }
+  return closest;
 }
 
 // --- Recommendation logic ---

@@ -476,13 +476,16 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [forecastHour, setForecastHour] = useState<string>("now");
 
-  async function fetchBriefing(isRefresh = false) {
+  async function fetchBriefing(isRefresh = false, hour?: string) {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/briefing", { cache: "no-store" });
+      const h = hour ?? forecastHour;
+      const url = h === "now" ? "/api/briefing" : `/api/briefing?hour=${h}`;
+      const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) throw new Error(`API error: ${res.status}`);
       const data = await res.json();
       setBriefing(data);
@@ -496,6 +499,11 @@ export default function Dashboard() {
       setLoading(false);
       setRefreshing(false);
     }
+  }
+
+  function handleHourChange(value: string) {
+    setForecastHour(value);
+    fetchBriefing(true, value);
   }
 
   useEffect(() => {
@@ -543,8 +551,24 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
-      {/* Refresh bar */}
-      <div className="flex items-center justify-center">
+      {/* Refresh bar + Time selector */}
+      <div className="flex items-center justify-center gap-3">
+        <select
+          value={forecastHour}
+          onChange={(e) => handleHourChange(e.target.value)}
+          disabled={refreshing}
+          className="px-3 py-2.5 rounded-lg bg-ocean-800 text-white text-sm font-medium border border-ocean-700 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-50"
+        >
+          <option value="now">Now</option>
+          {Array.from({ length: 24 }, (_, i) => {
+            const label = i === 0 ? "12am" : i < 12 ? `${i}am` : i === 12 ? "12pm" : `${i - 12}pm`;
+            return (
+              <option key={i} value={String(i)}>
+                {label}
+              </option>
+            );
+          })}
+        </select>
         <button
           onClick={() => fetchBriefing(true)}
           disabled={refreshing}
