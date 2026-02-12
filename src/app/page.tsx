@@ -9,8 +9,29 @@ interface DataSourceStatus {
   swell: { available: boolean; source: string };
 }
 
+interface SwellForecastPoint {
+  timestamp: string;
+  height: number;
+  period: number;
+  direction: string;
+}
+
+interface WindForecastPoint {
+  timestamp: string;
+  speed: number;
+  gust: number;
+  direction: string;
+}
+
+interface WeatherForecastPoint {
+  timestamp: string;
+  precis: string;
+  rainProbability?: number;
+}
+
 interface DiveBriefing {
   generatedAt: string;
+  forecastHour: number | null;
   timeOfDay: string;
   dataStatus: DataSourceStatus;
   conditions: {
@@ -44,6 +65,9 @@ interface DiveBriefing {
         direction: string;
       };
       trend: string;
+      forecast?: SwellForecastPoint[];
+      windForecast?: WindForecastPoint[];
+      weatherForecast?: WeatherForecastPoint[];
     } | null;
   };
   visibility: {
@@ -345,6 +369,177 @@ function ConditionCard({
   );
 }
 
+// --- Forecast Timeline ---
+
+/** Map weather precis strings to compact symbols. */
+function weatherIcon(precis: string): string {
+  const p = precis.toLowerCase();
+  if (p.includes("storm") || p.includes("thunder")) return "//";
+  if (p.includes("shower") || p.includes("rain")) return ",,";
+  if (p.includes("overcast")) return "==";
+  if (p.includes("cloudy")) return "::";
+  if (p.includes("partly")) return ".:";
+  if (p.includes("sunny") || p.includes("clear") || p.includes("fine")) return "()";
+  return "..";
+}
+
+function swellColor(height: number): string {
+  if (height >= 2.5) return "text-red-400";
+  if (height >= 1.5) return "text-orange-400";
+  if (height >= 1.0) return "text-yellow-400";
+  return "text-emerald-400";
+}
+
+function windColor(speed: number): string {
+  if (speed >= 20) return "text-red-400";
+  if (speed >= 12) return "text-orange-400";
+  if (speed >= 8) return "text-yellow-400";
+  return "text-emerald-400";
+}
+
+function rainColor(probability?: number): string {
+  if (probability === undefined) return "text-ocean-500";
+  if (probability >= 70) return "text-blue-400";
+  if (probability >= 40) return "text-blue-300/70";
+  return "text-ocean-500";
+}
+
+function ForecastTimeline({
+  swell,
+  selectedHour,
+  onSelectHour,
+}: {
+  swell: DiveBriefing["conditions"]["swell"];
+  selectedHour: string;
+  onSelectHour: (value: string) => void;
+}) {
+  if (!swell?.forecast?.length) return null;
+
+  // Get current Sydney hour
+  const now = new Date();
+  const sydneyHour = parseInt(
+    new Intl.DateTimeFormat("en-AU", { hour: "numeric", hour12: false, timeZone: "Australia/Sydney" }).format(now)
+  );
+
+  // Build timeline slots for the next 18 hours
+  const slots: {
+    hour: number;
+    label: string;
+    isTomorrow: boolean;
+    swell?: SwellForecastPoint;
+    wind?: WindForecastPoint;
+    weather?: WeatherForecastPoint;
+  }[] = [];
+
+  for (let offset = 0; offset <= 18; offset++) {
+    const h = (sydneyHour + offset) % 24;
+    const isTomorrow = sydneyHour + offset >= 24;
+
+    // Find closest forecast entry for this hour
+    const targetLabel = `${String(h).padStart(2, "0")}:00`;
+    const matchSwell = swell.forecast?.find((f) => {
+      const ts = f.timestamp.includes("T") ? f.timestamp : f.timestamp.replace(" ", "T");
+      try { return new Date(ts).getHours() === h; } catch { return false; }
+    });
+    const matchWind = swell.windForecast?.find((f) => {
+      const ts = f.timestamp.includes("T") ? f.timestamp : f.timestamp.replace(" ", "T");
+      try { return new Date(ts).getHours() === h; } catch { return false; }
+    });
+    const matchWeather = swell.weatherForecast?.find((f) => {
+      const ts = f.timestamp.includes("T") ? f.timestamp : f.timestamp.replace(" ", "T");
+      try { return new Date(ts).getHours() === h; } catch { return false; }
+    });
+
+    slots.push({
+      hour: h,
+      label: offset === 0 ? "Now" : formatHourLabel(h),
+      isTomorrow,
+      swell: matchSwell,
+      wind: matchWind,
+      weather: matchWeather,
+    });
+  }
+
+  return (
+    <div className="glass-card p-4 sm:p-5 overflow-hidden">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-ocean-400">
+          18-Hour Forecast
+        </p>
+        <p className="text-[10px] text-ocean-500">Tap to preview</p>
+      </div>
+      <div className="overflow-x-auto -mx-4 sm:-mx-5 px-4 sm:px-5 scrollbar-hide">
+        <div className="flex gap-1" style={{ minWidth: "max-content" }}>
+          {slots.map((slot, i) => {
+            const isSelected =
+              (i === 0 && selectedHour === "now") ||
+              selectedHour === String(slot.hour);
+            const isNight = slot.hour >= 19 || slot.hour < 5;
+            return (
+              <button
+                key={i}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectHour(i === 0 ? "now" : String(slot.hour));
+                }}
+                className={`flex flex-col items-center gap-1 py-2 px-2.5 rounded-lg text-center transition-all min-w-[52px] ${
+                  isSelected
+                    ? "bg-teal-500/15 border border-teal-500/30"
+                    : "border border-transparent hover:bg-white/[0.03]"
+                } ${isNight ? "opacity-50" : ""}`}
+              >
+                {/* Time */}
+                <span className={`text-[10px] font-semibold ${isSelected ? "text-teal-400" : "text-ocean-400"}`}>
+                  {slot.label}
+                </span>
+                {slot.isTomorrow && i > 0 && (
+                  <span className="text-[8px] text-ocean-600 -mt-1">tmrw</span>
+                )}
+                {/* Weather precis icon */}
+                {slot.weather ? (
+                  <span className={`text-[11px] font-mono leading-none ${rainColor(slot.weather.rainProbability)}`} title={slot.weather.precis}>
+                    {weatherIcon(slot.weather.precis)}
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-ocean-600 leading-none">..</span>
+                )}
+                {/* Swell */}
+                {slot.swell ? (
+                  <span className={`text-[11px] font-bold leading-none ${swellColor(slot.swell.height)}`}>
+                    {slot.swell.height}m
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-ocean-600 leading-none">—</span>
+                )}
+                {/* Wind */}
+                {slot.wind ? (
+                  <span className={`text-[10px] leading-none ${windColor(slot.wind.speed)}`}>
+                    {slot.wind.speed}kt
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-ocean-600 leading-none">—</span>
+                )}
+                {/* Rain probability */}
+                {slot.weather?.rainProbability !== undefined && (
+                  <span className={`text-[9px] leading-none ${rainColor(slot.weather.rainProbability)}`}>
+                    {slot.weather.rainProbability}%
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      {/* Legend */}
+      <div className="flex gap-4 mt-3 pt-2 border-t border-white/[0.04]">
+        <span className="text-[9px] text-ocean-500">Swell ht</span>
+        <span className="text-[9px] text-ocean-500">Wind kt</span>
+        <span className="text-[9px] text-ocean-500">Rain %</span>
+      </div>
+    </div>
+  );
+}
+
 function SiteCard({
   ranking,
   conditions,
@@ -598,6 +793,40 @@ function SiteCard({
   );
 }
 
+// --- Helpers ---
+
+function formatHourLabel(hour: number): string {
+  if (hour === 0) return "12am";
+  if (hour < 12) return `${hour}am`;
+  if (hour === 12) return "12pm";
+  return `${hour - 12}pm`;
+}
+
+/** Build time options starting at the current hour with relative labels for the next 18h. */
+function buildTimeOptions(): { value: string; label: string }[] {
+  const now = new Date();
+  // Use Australian Eastern time (Sydney)
+  const sydneyHour = parseInt(
+    new Intl.DateTimeFormat("en-AU", { hour: "numeric", hour12: false, timeZone: "Australia/Sydney" }).format(now)
+  );
+
+  const options: { value: string; label: string }[] = [
+    { value: "now", label: `Now — ${formatHourLabel(sydneyHour)}` },
+  ];
+
+  for (let offset = 1; offset <= 18; offset++) {
+    const h = (sydneyHour + offset) % 24;
+    const isTomorrow = sydneyHour + offset >= 24;
+    const dayLabel = isTomorrow ? " tmrw" : "";
+    options.push({
+      value: String(h),
+      label: `+${offset}h — ${formatHourLabel(h)}${dayLabel}`,
+    });
+  }
+
+  return options;
+}
+
 // --- Main Dashboard ---
 
 export default function Dashboard() {
@@ -686,15 +915,11 @@ export default function Dashboard() {
           disabled={refreshing}
           className="px-3 py-2 rounded-xl bg-ocean-900/60 text-white text-sm font-medium border border-white/[0.06] focus:outline-none focus:ring-2 focus:ring-teal-500/40 disabled:opacity-50 backdrop-blur-sm"
         >
-          <option value="now">Now</option>
-          {Array.from({ length: 24 }, (_, i) => {
-            const label = i === 0 ? "12am" : i < 12 ? `${i}am` : i === 12 ? "12pm" : `${i - 12}pm`;
-            return (
-              <option key={i} value={String(i)}>
-                {label}
-              </option>
-            );
-          })}
+          {buildTimeOptions().map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
         </select>
         <button
           onClick={() => fetchBriefing(true)}
@@ -838,6 +1063,17 @@ export default function Dashboard() {
           />
         </div>
       </section>
+
+      {/* Forecast Timeline */}
+      {swell && (
+        <section>
+          <ForecastTimeline
+            swell={swell}
+            selectedHour={forecastHour}
+            onSelectHour={handleHourChange}
+          />
+        </section>
+      )}
 
       {/* Visibility factors */}
       {visibility && (
