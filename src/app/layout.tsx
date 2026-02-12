@@ -3,7 +3,7 @@ import "./globals.css";
 import RegisterSW from "./components/RegisterSW";
 
 export const viewport: Viewport = {
-  themeColor: "#0a1628",
+  themeColor: "#060e1a",
 };
 
 export const metadata: Metadata = {
@@ -20,14 +20,28 @@ export const metadata: Metadata = {
 
 function Header() {
   return (
-    <header className="border-b border-ocean-800 bg-ocean-950/80 backdrop-blur-sm sticky top-0 z-50">
+    <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-ocean-950/70 backdrop-blur-xl">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-center h-16">
-          <div className="flex items-center gap-3">
-            <img src="/kingfish-logo.png" alt="Kingfish logo" className="h-10 w-10 object-contain" />
-            <h1 className="text-2xl font-semibold text-white tracking-tight">
-              Sydney Spearfishing Intel — Daily Briefing
-            </h1>
+        <div className="flex items-center justify-between h-14 sm:h-16">
+          <div className="flex items-center gap-2.5">
+            <img
+              src="/kingfish-logo.png"
+              alt="Kingfish logo"
+              className="h-8 w-8 sm:h-9 sm:w-9 object-contain"
+            />
+            <div>
+              <h1 className="text-base sm:text-lg font-semibold text-white tracking-tight leading-tight">
+                Spearo Intel
+              </h1>
+              <p className="text-[10px] sm:text-xs text-ocean-400 leading-tight hidden sm:block">
+                Sydney Northern Beaches
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] px-2 py-1 rounded-full bg-teal-500/10 text-teal-400 border border-teal-500/20">
+              Live
+            </span>
           </div>
         </div>
       </div>
@@ -50,7 +64,7 @@ export default function RootLayout({
       <body className="bg-ocean-950 text-ocean-100 min-h-screen antialiased">
         <RegisterSW />
         <Header />
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
           {children}
         </main>
       </body>

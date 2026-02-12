@@ -18,6 +18,7 @@ const config: Config = {
           600: "#007ba6",
           700: "#005e80",
           800: "#004159",
+          850: "#0d2137",
           900: "#0a1628",
           950: "#060e1a",
         },
@@ -25,6 +26,20 @@ const config: Config = {
           400: "#2dd4bf",
           500: "#14b8a6",
           600: "#0d9488",
+        },
+      },
+      animation: {
+        "fade-in-up": "fadeInUp 0.5s ease-out both",
+        "fade-in": "fadeIn 0.4s ease-out both",
+      },
+      keyframes: {
+        fadeInUp: {
+          "0%": { opacity: "0", transform: "translateY(12px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        fadeIn: {
+          "0%": { opacity: "0" },
+          "100%": { opacity: "1" },
         },
       },
     },
