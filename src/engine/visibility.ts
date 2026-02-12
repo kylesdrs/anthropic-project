@@ -2,8 +2,8 @@
  * Visibility estimation algorithm.
  *
  * Predicts underwater visibility (metres) from environmental factors.
- * Northern Beaches baseline: ~3-5m typical, 8-12m+ on good days,
- * 0.5-2m after heavy rain or big swell.
+ * Northern Beaches baseline: ~2-3m typical, 5-8m on good days,
+ * 8-12m+ on rare perfect days, 0.3-1.5m after rain or big swell.
  *
  * Primary factors (in order of impact):
  * 1. Rain history — runoff and sediment are the #1 vis killer
@@ -48,9 +48,9 @@ export interface VisibilityFactor {
 
 // --- Constants ---
 
-const BASELINE_VIS = 5; // metres — Northern Beaches median vis
-const MIN_VIS = 0.5;
-const MAX_VIS = 20;
+const BASELINE_VIS = 3; // metres — Northern Beaches realistic median vis
+const MIN_VIS = 0.3;
+const MAX_VIS = 15;
 
 // --- Estimation ---
 
@@ -126,21 +126,33 @@ function calculateRainImpact(rainfall: RainfallData): VisibilityFactor {
   let impact = 0;
   let description: string;
 
-  if (rainfall.last24h >= 20) {
+  if (rainfall.last24h >= 15) {
     impact = -4;
-    description = `Heavy rain last 24h (${rainfall.last24h}mm) — heavy runoff, vis will be terrible`;
-  } else if (rainfall.last24h >= 10) {
+    description = `Heavy rain last 24h (${rainfall.last24h}mm) — heavy runoff from lagoons, vis will be terrible`;
+  } else if (rainfall.last24h >= 8) {
     impact = -3;
-    description = `Moderate rain last 24h (${rainfall.last24h}mm) — significant sediment runoff`;
-  } else if (rainfall.last24h >= 5) {
-    impact = -1.5;
-    description = `Light rain last 24h (${rainfall.last24h}mm) — some runoff and turbidity`;
-  } else if (rainfall.last48h >= 15) {
-    impact = -1.5;
+    description = `Moderate rain last 24h (${rainfall.last24h}mm) — significant sediment and lagoon runoff`;
+  } else if (rainfall.last24h >= 3) {
+    impact = -2;
+    description = `Light rain last 24h (${rainfall.last24h}mm) — noticeable runoff and turbidity`;
+  } else if (rainfall.last24h >= 1) {
+    impact = -1;
+    description = `Trace rain last 24h (${rainfall.last24h}mm) — some creek and drain runoff`;
+  } else if (rainfall.last48h >= 10) {
+    impact = -2;
+    description = `Rain in last 48h (${rainfall.last48h}mm) — sediment still washing through`;
+  } else if (rainfall.last48h >= 5) {
+    impact = -1;
     description = `Rain in last 48h (${rainfall.last48h}mm) — residual turbidity`;
-  } else if (rainfall.last72h >= 20) {
+  } else if (rainfall.last72h >= 15) {
     impact = -1;
     description = `Rain in last 72h (${rainfall.last72h}mm) — lingering sediment`;
+  } else if (rainfall.last72h >= 5) {
+    impact = -0.5;
+    description = `Light rain in last 72h (${rainfall.last72h}mm) — minor residual turbidity`;
+  } else if (rainfall.daysSinceSignificantRain >= 7) {
+    impact = 2;
+    description = `${rainfall.daysSinceSignificantRain} days dry — water well cleared, good conditions`;
   } else if (rainfall.daysSinceSignificantRain >= 5) {
     impact = 1.5;
     description = `${rainfall.daysSinceSignificantRain} days since significant rain — water has cleared`;
@@ -148,8 +160,8 @@ function calculateRainImpact(rainfall: RainfallData): VisibilityFactor {
     impact = 0.5;
     description = `${rainfall.daysSinceSignificantRain} days since rain — still clearing`;
   } else {
-    impact = 0;
-    description = "Recent rain history — neutral effect";
+    impact = -0.5;
+    description = "Recent rain history — slight residual turbidity likely";
   }
 
   return { name: "Rainfall", impact, description };
@@ -169,23 +181,26 @@ function calculateSwellImpact(
   // Wind chop (short period, <8s) is far worse than clean groundswell.
   // Mid-period (8-12s) is in between.
   if (height >= 2.5) {
-    impact = swellType === "wind-chop" ? -4.5 : swellType === "mid-period" ? -3.5 : -2.5;
-    description = `Large ${height}m ${swellType} — heavy bottom disturbance, vis will be very poor`;
+    impact = swellType === "wind-chop" ? -5 : swellType === "mid-period" ? -4 : -3;
+    description = `Large ${height}m ${swellType} — heavy bottom disturbance, vis will be terrible`;
+  } else if (height >= 2.0) {
+    impact = swellType === "wind-chop" ? -4 : swellType === "mid-period" ? -3 : -2;
+    description = `${height}m ${swellType} — significant bottom disturbance on these shallow reefs`;
   } else if (height >= 1.5) {
-    impact = swellType === "wind-chop" ? -3 : swellType === "mid-period" ? -2 : -1.5;
-    description = `${height}m ${swellType} — significant turbidity and stirred bottom`;
+    impact = swellType === "wind-chop" ? -3 : swellType === "mid-period" ? -2.5 : -1.5;
+    description = `${height}m ${swellType} — considerable turbidity and stirred bottom`;
   } else if (height >= 1.0) {
-    impact = swellType === "wind-chop" ? -2 : swellType === "mid-period" ? -1 : -0.5;
+    impact = swellType === "wind-chop" ? -2.5 : swellType === "mid-period" ? -1.5 : -1;
     description =
       swellType === "wind-chop"
-        ? `${height}m wind chop (${period}s) — messy surface, poor vis`
-        : `${height}m ${swellType} (${period}s) — bottom disturbance`;
+        ? `${height}m wind chop (${period}s) — messy surface, reduced vis`
+        : `${height}m ${swellType} (${period}s) — noticeable bottom disturbance`;
   } else if (height >= 0.5) {
-    impact = swellType === "wind-chop" ? -0.5 : 0;
+    impact = swellType === "wind-chop" ? -1 : -0.5;
     description =
       swellType === "wind-chop"
-        ? `Light ${height}m wind chop — some surface disturbance`
-        : `Light ${height}m swell — minimal effect`;
+        ? `Light ${height}m wind chop — surface disturbance reducing vis`
+        : `Light ${height}m swell — minor effect on vis`;
   } else {
     impact = 0.5;
     description = `Very small ${height}m swell — calm conditions`;
@@ -379,7 +394,7 @@ function determineConfidence(input: VisibilityInput): VisibilityEstimate["confid
 }
 
 function visRating(metres: number): VisibilityEstimate["rating"] {
-  if (metres >= 10) return "excellent";
+  if (metres >= 8) return "excellent";
   if (metres >= 5) return "good";
   if (metres >= 3) return "fair";
   if (metres >= 1.5) return "poor";
