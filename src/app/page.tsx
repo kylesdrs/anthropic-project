@@ -134,34 +134,42 @@ function scoreColor(score: number): string {
   return "text-red-400";
 }
 
-function scoreBg(score: number): string {
-  if (score >= 8) return "bg-emerald-500/20 border-emerald-500/30";
-  if (score >= 6.5) return "bg-teal-500/20 border-teal-500/30";
-  if (score >= 5) return "bg-yellow-500/20 border-yellow-500/30";
-  if (score >= 3.5) return "bg-orange-500/20 border-orange-500/30";
-  return "bg-red-500/20 border-red-500/30";
+function scoreGlow(score: number): string {
+  if (score >= 8) return "score-glow-green";
+  if (score >= 6.5) return "score-glow-teal";
+  if (score >= 5) return "score-glow-yellow";
+  if (score >= 3.5) return "score-glow-orange";
+  return "score-glow-red";
+}
+
+function scoreBorderAccent(score: number): string {
+  if (score >= 8) return "border-emerald-500/20";
+  if (score >= 6.5) return "border-teal-500/20";
+  if (score >= 5) return "border-yellow-500/20";
+  if (score >= 3.5) return "border-orange-500/20";
+  return "border-red-500/20";
 }
 
 function riskColor(level: string): string {
   switch (level) {
     case "low":
-      return "bg-emerald-500/20 text-emerald-400";
+      return "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20";
     case "moderate":
-      return "bg-yellow-500/20 text-yellow-400";
+      return "bg-yellow-500/15 text-yellow-400 border border-yellow-500/20";
     case "elevated":
-      return "bg-orange-500/20 text-orange-400";
+      return "bg-orange-500/15 text-orange-400 border border-orange-500/20";
     case "high":
-      return "bg-red-500/20 text-red-400";
+      return "bg-red-500/15 text-red-400 border border-red-500/20";
     default:
-      return "bg-ocean-800 text-ocean-400";
+      return "bg-ocean-800/50 text-ocean-400";
   }
 }
 
 function likelihoodColor(score: number): string {
-  if (score >= 70) return "bg-emerald-500/20 text-emerald-400";
-  if (score >= 50) return "bg-teal-500/20 text-teal-400";
-  if (score >= 30) return "bg-yellow-500/20 text-yellow-400";
-  return "bg-ocean-800 text-ocean-400";
+  if (score >= 70) return "bg-emerald-500/15 text-emerald-400";
+  if (score >= 50) return "bg-teal-500/15 text-teal-400";
+  if (score >= 30) return "bg-yellow-500/15 text-yellow-400";
+  return "bg-ocean-800/50 text-ocean-400";
 }
 
 function formatTime(iso: string): string {
@@ -188,22 +196,99 @@ function alertTypeLabel(type: string): string {
   return type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+// --- Skeleton Loading ---
+
+function SkeletonLoader() {
+  return (
+    <div className="space-y-8 animate-fade-in">
+      {/* Hero skeleton */}
+      <div className="glass-card p-8">
+        <div className="flex flex-col sm:flex-row items-center gap-6">
+          <div className="flex-1 space-y-3 w-full">
+            <div className="skeleton h-4 w-32" />
+            <div className="skeleton h-6 w-3/4" />
+            <div className="skeleton h-4 w-48" />
+          </div>
+          <div className="skeleton h-24 w-24 rounded-2xl" />
+        </div>
+        <div className="flex gap-2 mt-6">
+          <div className="skeleton h-7 w-24 rounded-full" />
+          <div className="skeleton h-7 w-32 rounded-full" />
+          <div className="skeleton h-7 w-20 rounded-full" />
+        </div>
+      </div>
+
+      {/* Conditions skeleton */}
+      <div>
+        <div className="skeleton h-4 w-40 mb-4" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 stagger-children">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="glass-card p-4 space-y-2">
+              <div className="skeleton h-3 w-12" />
+              <div className="skeleton h-6 w-16" />
+              <div className="skeleton h-3 w-20" />
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Sites skeleton */}
+      <div>
+        <div className="skeleton h-4 w-32 mb-4" />
+        <div className="grid gap-4 sm:grid-cols-2 stagger-children">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="glass-card p-5 space-y-3">
+              <div className="flex justify-between">
+                <div className="skeleton h-5 w-40" />
+                <div className="skeleton h-8 w-12 rounded-lg" />
+              </div>
+              <div className="skeleton h-3 w-full" />
+              <div className="skeleton h-3 w-2/3" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- Section Header ---
+
+function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
+  return (
+    <div className="mb-4">
+      <div className="section-divider mb-4" />
+      <h2 className="text-xs font-semibold uppercase tracking-[0.15em] text-ocean-400">
+        {title}
+      </h2>
+      {subtitle && (
+        <p className="text-[11px] text-ocean-600 mt-0.5">{subtitle}</p>
+      )}
+    </div>
+  );
+}
+
 // --- Components ---
 
 function ConditionCard({
   label,
   value,
   sub,
+  icon,
 }: {
   label: string;
   value: string;
   sub: string;
+  icon: string;
 }) {
   return (
-    <div className="rounded-xl bg-ocean-900/40 border border-ocean-800 p-4">
-      <p className="text-xs text-ocean-400 mb-1">{label}</p>
-      <p className="text-xl font-semibold text-white">{value}</p>
-      <p className="text-xs text-ocean-500 mt-1">{sub}</p>
+    <div className="glass-card p-4 group">
+      <div className="flex items-center gap-1.5 mb-2">
+        <span className="text-sm opacity-60 group-hover:opacity-80 transition-opacity">{icon}</span>
+        <p className="text-[11px] font-medium text-ocean-400 uppercase tracking-wider">{label}</p>
+      </div>
+      <p className="text-xl font-bold text-white leading-tight">{value}</p>
+      <p className="text-[11px] text-ocean-500 mt-1.5 leading-snug">{sub}</p>
     </div>
   );
 }
@@ -224,60 +309,73 @@ function SiteCard({
 
   return (
     <div
-      className={`rounded-xl border p-4 cursor-pointer transition-all ${scoreBg(diveScore.overall)}`}
+      className={`glass-card p-5 cursor-pointer transition-all duration-200 ${scoreBorderAccent(diveScore.overall)} ${expanded ? "ring-1 ring-white/[0.08]" : ""}`}
       onClick={() => setExpanded(!expanded)}
     >
       {/* Header row */}
-      <div className="flex items-center justify-between mb-2">
-        <div>
-          <span className="text-xs text-ocean-400 mr-2">#{ranking.rank}</span>
-          <span className="font-medium text-white">{site.name}</span>
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[10px] font-bold text-ocean-500 bg-ocean-800/60 px-1.5 py-0.5 rounded">
+              #{ranking.rank}
+            </span>
+            <h3 className="font-semibold text-white text-[15px] truncate">{site.name}</h3>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span
+              className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${scoreColor(diveScore.overall)} bg-ocean-900/80`}
+            >
+              {diveScore.label}
+            </span>
+            <span className="text-[10px] text-ocean-500">
+              {conditionsFit.overallFit}
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className={`text-2xl font-bold ${scoreColor(diveScore.overall)}`}>
+        <div className={`flex flex-col items-center ml-3 px-3 py-1.5 rounded-xl bg-ocean-950/60 ${scoreGlow(diveScore.overall)}`}>
+          <span className={`text-2xl font-bold leading-none ${scoreColor(diveScore.overall)}`}>
             {diveScore.overall}
           </span>
-          <span className="text-xs text-ocean-400">/10</span>
+          <span className="text-[9px] text-ocean-500 mt-0.5">/10</span>
         </div>
-      </div>
-
-      <div className="flex items-center gap-2 mb-2">
-        <span
-          className={`text-xs px-2 py-0.5 rounded-full ${scoreColor(diveScore.overall)} bg-ocean-900/60`}
-        >
-          {diveScore.label}
-        </span>
-        <span className="text-xs text-ocean-500">
-          Fit: {conditionsFit.overallFit}
-        </span>
-        <span className="text-xs text-ocean-600">
-          {expanded ? "tap to collapse" : "tap for detail"}
-        </span>
       </div>
 
       {diveScore.topReasons.length > 0 && (
-        <p className="text-xs text-ocean-300 mb-1">
+        <p className="text-[11px] text-ocean-300 leading-relaxed mb-2">
           {diveScore.topReasons.join(" · ")}
         </p>
       )}
 
       {warnings.length > 0 && !expanded && (
-        <div className="mt-2">
+        <div className="mt-2 space-y-0.5">
           {warnings.slice(0, 2).map((w, i) => (
-            <p key={i} className="text-xs text-orange-400">
+            <p key={i} className="text-[11px] text-orange-400/80">
               {w}
             </p>
           ))}
         </div>
       )}
 
+      {/* Expand hint */}
+      <div className="flex items-center justify-center mt-3 pt-2 border-t border-white/[0.04]">
+        <span className="text-[10px] text-ocean-600">
+          {expanded ? "tap to collapse" : "tap for details"}
+        </span>
+        <svg
+          className={`w-3 h-3 ml-1 text-ocean-600 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
+          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
+
       {expanded && (
-        <div className="mt-3 pt-3 border-t border-ocean-800 space-y-4">
+        <div className="mt-3 pt-3 border-t border-white/[0.06] space-y-4 animate-fade-in">
           {/* Explanation paragraph */}
           {explanation && (
-            <div className="rounded-lg bg-ocean-950/60 border border-ocean-700/40 p-3">
-              <p className="text-xs font-medium text-ocean-300 mb-1.5">Why this score?</p>
-              <p className="text-sm text-ocean-200 leading-relaxed">
+            <div className="rounded-xl bg-ocean-950/60 border border-white/[0.04] p-3.5">
+              <p className="text-[10px] font-semibold text-ocean-400 uppercase tracking-wider mb-1.5">Why this score?</p>
+              <p className="text-[13px] text-ocean-200 leading-relaxed">
                 {explanation}
               </p>
             </div>
@@ -285,77 +383,77 @@ function SiteCard({
 
           {/* Conditions at this site */}
           <div>
-            <p className="text-xs font-medium text-ocean-400 mb-2">Conditions at {site.name}</p>
+            <p className="text-[10px] font-semibold text-ocean-400 uppercase tracking-wider mb-2">Site Conditions</p>
             <div className="grid grid-cols-2 gap-2">
-              <div className="rounded-lg bg-ocean-950/50 p-2.5">
-                <p className="text-[10px] text-ocean-500">Swell</p>
+              <div className="rounded-xl bg-ocean-950/50 border border-white/[0.03] p-3">
+                <p className="text-[10px] text-ocean-500 mb-1">Swell</p>
                 <p className="text-sm font-semibold text-white">
                   {swell ? `${swell.current.height}m` : "—"}
                 </p>
-                <p className="text-[10px] text-ocean-500">
+                <p className="text-[10px] text-ocean-500 mt-0.5">
                   {swell ? `${swell.current.period}s ${swell.current.direction} · ${swell.trend}` : "—"}
                 </p>
                 {conditionsFit.swellOk ? (
-                  <p className="text-[10px] text-emerald-400 mt-0.5">Within site limit</p>
+                  <p className="text-[10px] text-emerald-400 mt-1">Within site limit</p>
                 ) : (
-                  <p className="text-[10px] text-red-400 mt-0.5">Exceeds site limit</p>
+                  <p className="text-[10px] text-red-400 mt-1">Exceeds site limit</p>
                 )}
               </div>
 
-              <div className="rounded-lg bg-ocean-950/50 p-2.5">
-                <p className="text-[10px] text-ocean-500">Wind</p>
+              <div className="rounded-xl bg-ocean-950/50 border border-white/[0.03] p-3">
+                <p className="text-[10px] text-ocean-500 mb-1">Wind</p>
                 <p className="text-sm font-semibold text-white">
                   {obs ? `${obs.windSpeed}kt ${obs.windDirection}` : "—"}
                 </p>
-                <p className="text-[10px] text-ocean-500">
+                <p className="text-[10px] text-ocean-500 mt-0.5">
                   {obs ? `Gusts ${obs.windGust}kt` : "—"}
                 </p>
                 {conditionsFit.windIdeal ? (
-                  <p className="text-[10px] text-emerald-400 mt-0.5">Ideal direction</p>
+                  <p className="text-[10px] text-emerald-400 mt-1">Ideal direction</p>
                 ) : (
-                  <p className="text-[10px] text-yellow-400 mt-0.5">Not ideal direction</p>
+                  <p className="text-[10px] text-yellow-400 mt-1">Not ideal direction</p>
                 )}
               </div>
 
-              <div className="rounded-lg bg-ocean-950/50 p-2.5">
-                <p className="text-[10px] text-ocean-500">Visibility</p>
+              <div className="rounded-xl bg-ocean-950/50 border border-white/[0.03] p-3">
+                <p className="text-[10px] text-ocean-500 mb-1">Visibility</p>
                 <p className={`text-sm font-semibold ${visibility ? scoreColor(diveScore.breakdown.visibility) : "text-ocean-500"}`}>
                   {visibility ? `${visibility.metres}m` : "—"}
                 </p>
-                <p className="text-[10px] text-ocean-500">
+                <p className="text-[10px] text-ocean-500 mt-0.5">
                   {visibility ? `${visibility.rating} · ${visibility.confidence} conf.` : "—"}
                 </p>
               </div>
 
-              <div className="rounded-lg bg-ocean-950/50 p-2.5">
-                <p className="text-[10px] text-ocean-500">Tide</p>
+              <div className="rounded-xl bg-ocean-950/50 border border-white/[0.03] p-3">
+                <p className="text-[10px] text-ocean-500 mb-1">Tide</p>
                 <p className="text-sm font-semibold text-white">
                   {weather ? weather.tides.currentState.replace("_", " ") : "—"}
                 </p>
-                <p className="text-[10px] text-ocean-500">
+                <p className="text-[10px] text-ocean-500 mt-0.5">
                   {weather?.tides.nextHigh
                     ? `High ${formatTime(weather.tides.nextHigh.time)} (${weather.tides.nextHigh.height}m)`
                     : "—"}
                 </p>
                 {conditionsFit.tideGood ? (
-                  <p className="text-[10px] text-emerald-400 mt-0.5">Good for this site</p>
+                  <p className="text-[10px] text-emerald-400 mt-1">Good for this site</p>
                 ) : (
-                  <p className="text-[10px] text-yellow-400 mt-0.5">Not ideal</p>
+                  <p className="text-[10px] text-yellow-400 mt-1">Not ideal</p>
                 )}
               </div>
 
-              <div className="rounded-lg bg-ocean-950/50 p-2.5">
-                <p className="text-[10px] text-ocean-500">Rain (48h)</p>
+              <div className="rounded-xl bg-ocean-950/50 border border-white/[0.03] p-3">
+                <p className="text-[10px] text-ocean-500 mb-1">Rain (48h)</p>
                 <p className="text-sm font-semibold text-white">
                   {weather ? `${weather.rainfall.last48h}mm` : "—"}
                 </p>
-                <p className="text-[10px] text-ocean-500">
+                <p className="text-[10px] text-ocean-500 mt-0.5">
                   {weather ? `${weather.rainfall.daysSinceSignificantRain}d since heavy` : "—"}
                 </p>
               </div>
 
-              <div className="rounded-lg bg-ocean-950/50 p-2.5">
-                <p className="text-[10px] text-ocean-500">Shark Risk</p>
+              <div className="rounded-xl bg-ocean-950/50 border border-white/[0.03] p-3">
+                <p className="text-[10px] text-ocean-500 mb-1">Shark Risk</p>
                 <p className={`text-sm font-semibold ${
                   sharkRisk?.level === "low" ? "text-emerald-400" :
                   sharkRisk?.level === "moderate" ? "text-yellow-400" :
@@ -364,7 +462,7 @@ function SiteCard({
                 }`}>
                   {sharkRisk ? sharkRisk.level : "—"}
                 </p>
-                <p className="text-[10px] text-ocean-500">
+                <p className="text-[10px] text-ocean-500 mt-0.5">
                   {sharkRisk ? `Score: ${sharkRisk.score}/100` : "—"}
                 </p>
               </div>
@@ -374,12 +472,12 @@ function SiteCard({
           {/* Visibility factors for this site */}
           {visibility && visibility.factors.length > 0 && (
             <div>
-              <p className="text-xs font-medium text-ocean-400 mb-2">Visibility Factors</p>
+              <p className="text-[10px] font-semibold text-ocean-400 uppercase tracking-wider mb-2">Visibility Factors</p>
               <div className="grid grid-cols-2 gap-1.5">
                 {visibility.factors.map((f) => (
-                  <div key={f.name} className="flex items-center justify-between rounded bg-ocean-950/40 px-2 py-1.5">
+                  <div key={f.name} className="flex items-center justify-between rounded-lg bg-ocean-950/40 border border-white/[0.03] px-2.5 py-2">
                     <span className="text-[10px] text-ocean-400">{f.name}</span>
-                    <span className={`text-[10px] font-semibold ${
+                    <span className={`text-[10px] font-bold ${
                       f.impact > 0 ? "text-emerald-400" : f.impact < 0 ? "text-red-400" : "text-ocean-500"
                     }`}>
                       {f.impact > 0 ? "+" : ""}{f.impact}m
@@ -387,21 +485,12 @@ function SiteCard({
                   </div>
                 ))}
               </div>
-              <p className="mt-2 text-[11px] leading-relaxed text-ocean-300">
-                We estimate <span className="font-semibold text-ocean-100">{visibility.metres}m</span> visibility ({visibility.rating}) at {site.name}.{" "}
-                {visibility.factors
-                  .filter((f) => f.impact !== 0)
-                  .sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact))
-                  .map((f) => f.description)
-                  .join(". ")}
-                .
-              </p>
             </div>
           )}
 
           {/* Score breakdown */}
           <div>
-            <p className="text-xs font-medium text-ocean-400 mb-2">Score Breakdown</p>
+            <p className="text-[10px] font-semibold text-ocean-400 uppercase tracking-wider mb-2">Score Breakdown</p>
             <div className="grid grid-cols-4 gap-2 text-center">
               {(
                 [
@@ -411,10 +500,10 @@ function SiteCard({
                   ["Comfort", diveScore.breakdown.comfort, "15%"],
                 ] as [string, number, string][]
               ).map(([label, val, weight]) => (
-                <div key={label} className="rounded-lg bg-ocean-950/40 p-2">
+                <div key={label} className="rounded-xl bg-ocean-950/50 border border-white/[0.03] p-2.5">
                   <p className="text-[10px] text-ocean-500">{label}</p>
                   <p className={`text-lg font-bold ${scoreColor(val)}`}>{val}</p>
-                  <p className="text-[10px] text-ocean-600">{weight}</p>
+                  <p className="text-[9px] text-ocean-600">{weight}</p>
                 </div>
               ))}
             </div>
@@ -423,44 +512,46 @@ function SiteCard({
           {/* Top species */}
           {topSpecies.length > 0 && (
             <div>
-              <p className="text-xs font-medium text-ocean-400 mb-2">Species Forecast</p>
-              {topSpecies.map((sp) => (
-                <div
-                  key={sp.name}
-                  className="flex items-center justify-between py-1.5 border-b border-ocean-800/30 last:border-0"
-                >
-                  <div>
-                    <span className="text-xs text-ocean-200">{sp.name}</span>
-                    <p className="text-[10px] text-ocean-500">{sp.regulation}</p>
-                  </div>
-                  <span
-                    className={`text-xs font-semibold px-2 py-0.5 rounded-full ${likelihoodColor(sp.likelihood.score)}`}
+              <p className="text-[10px] font-semibold text-ocean-400 uppercase tracking-wider mb-2">Species Forecast</p>
+              <div className="space-y-1">
+                {topSpecies.map((sp) => (
+                  <div
+                    key={sp.name}
+                    className="flex items-center justify-between py-2 px-2.5 rounded-lg hover:bg-ocean-950/30 transition-colors"
                   >
-                    {sp.likelihood.score}%
-                  </span>
-                </div>
-              ))}
+                    <div>
+                      <span className="text-xs text-ocean-200 font-medium">{sp.name}</span>
+                      <p className="text-[10px] text-ocean-500">{sp.regulation}</p>
+                    </div>
+                    <span
+                      className={`text-xs font-bold px-2.5 py-1 rounded-full ${likelihoodColor(sp.likelihood.score)}`}
+                    >
+                      {sp.likelihood.score}%
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
           {/* Warnings / concerns */}
           {(warnings.length > 0 || diveScore.concerns.length > 0) && (
-            <div>
-              <p className="text-xs font-medium text-ocean-400 mb-1">Warnings</p>
+            <div className="rounded-xl bg-orange-500/5 border border-orange-500/10 p-3">
+              <p className="text-[10px] font-semibold text-orange-400 uppercase tracking-wider mb-1.5">Warnings</p>
               {warnings.map((w, i) => (
-                <p key={`w-${i}`} className="text-xs text-orange-400 mb-0.5">{w}</p>
+                <p key={`w-${i}`} className="text-[11px] text-orange-400/80 mb-0.5">{w}</p>
               ))}
               {diveScore.concerns.map((c, i) => (
-                <p key={`c-${i}`} className="text-xs text-orange-400 mb-0.5">{c}</p>
+                <p key={`c-${i}`} className="text-[11px] text-orange-400/80 mb-0.5">{c}</p>
               ))}
             </div>
           )}
 
           {/* Site info */}
           {site.restrictions && (
-            <div className="rounded-lg bg-ocean-950/40 p-2.5">
+            <div className="rounded-xl bg-ocean-950/40 border border-white/[0.03] p-3">
               <p className="text-[10px] text-ocean-500 mb-0.5">Regulations</p>
-              <p className="text-[10px] text-ocean-300 leading-snug">{site.restrictions}</p>
+              <p className="text-[11px] text-ocean-300 leading-snug">{site.restrictions}</p>
             </div>
           )}
         </div>
@@ -511,25 +602,23 @@ export default function Dashboard() {
   }, []);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
-          <div className="text-4xl mb-4 animate-pulse">🤿</div>
-          <p className="text-ocean-400">Loading conditions...</p>
-        </div>
-      </div>
-    );
+    return <SkeletonLoader />;
   }
 
   if (error || !briefing) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
-          <p className="text-red-400 mb-2">Failed to load briefing</p>
-          <p className="text-ocean-500 text-sm">{error}</p>
+        <div className="glass-card p-8 text-center max-w-md">
+          <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+          </div>
+          <p className="text-white font-medium mb-1">Failed to load briefing</p>
+          <p className="text-ocean-400 text-sm mb-5">{error}</p>
           <button
             onClick={() => fetchBriefing()}
-            className="mt-4 px-4 py-2 rounded-lg bg-ocean-800 text-ocean-200 text-sm hover:bg-ocean-700 transition-colors"
+            className="px-5 py-2.5 rounded-xl bg-teal-500/15 text-teal-400 text-sm font-medium border border-teal-500/20 hover:bg-teal-500/25 transition-colors"
           >
             Retry
           </button>
@@ -541,6 +630,7 @@ export default function Dashboard() {
   const { conditions, visibility, siteRankings, recommendation, dataStatus } = briefing;
   const { weather, swell, sharkActivity } = conditions;
   const obs = weather?.observation ?? null;
+  const topScore = siteRankings[0]?.diveScore.overall ?? 0;
 
   // Identify unavailable data sources
   const unavailableSources = [
@@ -550,14 +640,14 @@ export default function Dashboard() {
   ].filter(Boolean) as string[];
 
   return (
-    <div className="space-y-8">
-      {/* Refresh bar + Time selector */}
+    <div className="space-y-10 animate-fade-in-up">
+      {/* Controls bar */}
       <div className="flex items-center justify-center gap-3">
         <select
           value={forecastHour}
           onChange={(e) => handleHourChange(e.target.value)}
           disabled={refreshing}
-          className="px-3 py-2.5 rounded-lg bg-ocean-800 text-white text-sm font-medium border border-ocean-700 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-50"
+          className="px-3 py-2 rounded-xl bg-ocean-900/60 text-white text-sm font-medium border border-white/[0.06] focus:outline-none focus:ring-2 focus:ring-teal-500/40 disabled:opacity-50 backdrop-blur-sm"
         >
           <option value="now">Now</option>
           {Array.from({ length: 24 }, (_, i) => {
@@ -572,7 +662,7 @@ export default function Dashboard() {
         <button
           onClick={() => fetchBriefing(true)}
           disabled={refreshing}
-          className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-emerald-600 text-white font-medium text-sm hover:bg-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-2 px-5 py-2 rounded-xl bg-teal-500/15 text-teal-400 font-medium text-sm border border-teal-500/20 hover:bg-teal-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <svg
             className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`}
@@ -587,59 +677,71 @@ export default function Dashboard() {
               d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
             />
           </svg>
-          {refreshing ? "Refreshing..." : "Refresh Data"}
+          {refreshing ? "Refreshing..." : "Refresh"}
         </button>
       </div>
 
       {/* Data availability warning */}
       {unavailableSources.length > 0 && (
-        <div className="rounded-xl bg-orange-500/10 border border-orange-500/30 p-4">
-          <p className="text-sm font-medium text-orange-400 mb-1">
-            Some data sources are unavailable
-          </p>
-          <p className="text-xs text-orange-300/80">
-            {unavailableSources.join(" · ")}
-          </p>
-          <p className="text-xs text-orange-500/70 mt-1">
-            Values shown as &ldquo;—&rdquo; could not be fetched from live sources. Do not rely on incomplete data for safety decisions.
-          </p>
+        <div className="glass-card border-orange-500/15 p-4">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full bg-orange-500/10 border border-orange-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <svg className="w-4 h-4 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-medium text-orange-400 mb-0.5">
+                Some data sources are unavailable
+              </p>
+              <p className="text-[11px] text-orange-300/70">
+                {unavailableSources.join(" · ")}
+              </p>
+              <p className="text-[11px] text-ocean-500 mt-1">
+                Do not rely on incomplete data for safety decisions.
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
       {/* Hero: Recommendation */}
-      <section
-        className={`rounded-2xl border p-6 sm:p-8 ${recommendation.go ? scoreBg(siteRankings[0]?.diveScore.overall ?? 5) : "bg-red-500/10 border-red-500/20"}`}
-      >
+      <section className={`glass-card p-6 sm:p-8 ${scoreBorderAccent(topScore)} ${scoreGlow(topScore)}`}>
         <div className="flex flex-col sm:flex-row items-center gap-6">
           <div className="text-center sm:text-left flex-1">
-            <p className="text-sm uppercase tracking-wider text-ocean-400 mb-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-ocean-400 mb-3">
               Dive Briefing · {briefing.timeOfDay}
             </p>
-            <p className="text-lg sm:text-xl text-white font-medium mb-3">
+            <p className="text-lg sm:text-xl text-white font-semibold mb-2 leading-snug text-balance">
               {recommendation.summary}
             </p>
             <p className="text-sm text-ocean-300">
               {recommendation.bestTimeWindow}
             </p>
           </div>
-          <div className="text-center">
-            <div
-              className={`text-6xl sm:text-7xl font-bold ${scoreColor(siteRankings[0]?.diveScore.overall ?? 0)}`}
-            >
-              {siteRankings[0]?.diveScore.overall ?? "—"}
+          <div className="text-center flex-shrink-0">
+            <div className={`inline-flex flex-col items-center px-5 py-4 rounded-2xl bg-ocean-950/60 ${scoreGlow(topScore)}`}>
+              <div
+                className={`text-5xl sm:text-6xl font-bold leading-none ${scoreColor(topScore)}`}
+              >
+                {siteRankings[0]?.diveScore.overall ?? "—"}
+              </div>
+              <p className="text-[11px] text-ocean-400 mt-1.5 font-medium">
+                {siteRankings[0]?.diveScore.label ?? "—"}
+              </p>
+              <p className="text-[10px] text-ocean-500 mt-0.5">
+                {recommendation.bestSite}
+              </p>
             </div>
-            <p className="text-sm text-ocean-400 mt-1">
-              {siteRankings[0]?.diveScore.label ?? "—"} · {recommendation.bestSite}
-            </p>
           </div>
         </div>
 
         {/* Key factors */}
-        <div className="flex flex-wrap gap-2 mt-4">
+        <div className="flex flex-wrap gap-2 mt-5 pt-4 border-t border-white/[0.04]">
           {recommendation.keyFactors.map((f, i) => (
             <span
               key={i}
-              className="text-xs px-2.5 py-1 rounded-full bg-ocean-900/60 text-ocean-300"
+              className="text-[11px] px-3 py-1.5 rounded-full bg-ocean-950/60 text-ocean-300 border border-white/[0.04]"
             >
               {f}
             </span>
@@ -649,21 +751,22 @@ export default function Dashboard() {
 
       {/* Conditions Strip */}
       <section>
-        <h2 className="text-sm uppercase tracking-wider text-ocean-400 mb-3">
-          Current Conditions
-        </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <SectionHeader title="Current Conditions" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 stagger-children">
           <ConditionCard
+            icon="~"
             label="Swell"
             value={swell ? `${swell.current.height}m` : "—"}
             sub={swell ? `${swell.current.period}s ${swell.current.direction} · ${swell.trend}` : "Data unavailable"}
           />
           <ConditionCard
+            icon=">"
             label="Wind"
             value={obs ? `${obs.windSpeed}kt ${obs.windDirection}` : "—"}
             sub={obs ? `Gusts ${obs.windGust}kt` : "Data unavailable"}
           />
           <ConditionCard
+            icon="*"
             label="Water Temp"
             value={
               weather?.seaSurfaceTemp
@@ -673,11 +776,13 @@ export default function Dashboard() {
             sub={obs ? `Air ${obs.airTemp}°C` : "Data unavailable"}
           />
           <ConditionCard
+            icon="o"
             label="Visibility"
             value={visibility ? `${visibility.metres}m` : "—"}
-            sub={visibility ? `${visibility.rating} · ${visibility.confidence} confidence` : "Requires weather + swell data"}
+            sub={visibility ? `${visibility.rating} · ${visibility.confidence} conf.` : "Requires weather + swell"}
           />
           <ConditionCard
+            icon="^"
             label="Tide"
             value={weather ? weather.tides.currentState.replace("_", " ") : "—"}
             sub={
@@ -687,6 +792,7 @@ export default function Dashboard() {
             }
           />
           <ConditionCard
+            icon="|"
             label="Rain (48h)"
             value={weather ? `${weather.rainfall.last48h}mm` : "—"}
             sub={weather ? `${weather.rainfall.daysSinceSignificantRain}d since heavy rain` : "Data unavailable"}
@@ -697,25 +803,23 @@ export default function Dashboard() {
       {/* Visibility factors */}
       {visibility && (
         <section>
-          <h2 className="text-sm uppercase tracking-wider text-ocean-400 mb-3">
-            Visibility Breakdown
-          </h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+          <SectionHeader title="Visibility Breakdown" />
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 stagger-children">
             {visibility.factors.map((f) => (
               <div
                 key={f.name}
-                className="rounded-lg bg-ocean-900/40 border border-ocean-800 p-3"
+                className="glass-card p-3"
               >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-ocean-400">{f.name}</span>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[11px] font-medium text-ocean-400">{f.name}</span>
                   <span
-                    className={`text-xs font-semibold ${f.impact > 0 ? "text-emerald-400" : f.impact < 0 ? "text-red-400" : "text-ocean-500"}`}
+                    className={`text-[11px] font-bold ${f.impact > 0 ? "text-emerald-400" : f.impact < 0 ? "text-red-400" : "text-ocean-500"}`}
                   >
                     {f.impact > 0 ? "+" : ""}
                     {f.impact}m
                   </span>
                 </div>
-                <p className="text-[10px] text-ocean-500 leading-tight">
+                <p className="text-[10px] text-ocean-500 leading-snug">
                   {f.description}
                 </p>
               </div>
@@ -726,17 +830,15 @@ export default function Dashboard() {
 
       {/* Site Rankings */}
       <section>
-        <h2 className="text-sm uppercase tracking-wider text-ocean-400 mb-3">
-          Site Rankings
-        </h2>
+        <SectionHeader title="Site Rankings" subtitle={`${siteRankings.length} sites ranked by conditions`} />
         {siteRankings.length > 0 ? (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 stagger-children">
             {siteRankings.map((ranking) => (
               <SiteCard key={ranking.site.id} ranking={ranking} conditions={conditions} />
             ))}
           </div>
         ) : (
-          <div className="rounded-xl bg-ocean-900/40 border border-ocean-800 p-6 text-center">
+          <div className="glass-card p-8 text-center">
             <p className="text-ocean-400 text-sm">Site rankings unavailable — requires weather and swell data</p>
           </div>
         )}
@@ -745,26 +847,24 @@ export default function Dashboard() {
       {/* Species Forecast */}
       {siteRankings.length > 0 && (
         <section>
-          <h2 className="text-sm uppercase tracking-wider text-ocean-400 mb-3">
-            Species Forecast
-            <span className="text-ocean-600 ml-2 normal-case">
-              (at {siteRankings[0]?.site.name ?? "best site"})
-            </span>
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+          <SectionHeader
+            title="Species Forecast"
+            subtitle={`Likelihood at ${siteRankings[0]?.site.name ?? "best site"}`}
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 stagger-children">
             {(siteRankings[0]?.topSpecies ?? []).map((sp) => (
               <div
                 key={sp.name}
-                className="rounded-lg bg-ocean-900/40 border border-ocean-800 p-3 flex items-center justify-between"
+                className="glass-card p-4 flex items-center justify-between group"
               >
                 <div>
-                  <span className="text-sm text-white">{sp.name}</span>
+                  <span className="text-sm text-white font-medium">{sp.name}</span>
                   <p className="text-[10px] text-ocean-500 mt-0.5">
                     {sp.regulation}
                   </p>
                 </div>
                 <span
-                  className={`text-sm font-semibold px-2.5 py-1 rounded-full ${likelihoodColor(sp.likelihood.score)}`}
+                  className={`text-sm font-bold px-3 py-1.5 rounded-full ${likelihoodColor(sp.likelihood.score)}`}
                 >
                   {sp.likelihood.score}%
                 </span>
@@ -776,15 +876,18 @@ export default function Dashboard() {
 
       {/* Safety Panel */}
       <section>
-        <h2 className="text-sm uppercase tracking-wider text-ocean-400 mb-3">
-          Shark Activity
-        </h2>
-        <div className="rounded-xl bg-ocean-900/40 border border-ocean-800 p-4">
-          <div className="flex items-center gap-3 mb-3">
-            <span className="text-sm font-medium text-white">Risk Level</span>
+        <SectionHeader title="Shark Activity" />
+        <div className="glass-card p-5">
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-sm font-semibold text-white">Risk Level</span>
+            {siteRankings[0]?.sharkRisk && (
+              <span className={`text-[11px] font-medium px-2.5 py-1 rounded-full ${riskColor(siteRankings[0].sharkRisk.level)}`}>
+                {siteRankings[0].sharkRisk.level}
+              </span>
+            )}
             {siteRankings[0] && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-ocean-800 text-ocean-400">
-                Based on {siteRankings[0].site.name}
+              <span className="text-[10px] text-ocean-500">
+                at {siteRankings[0].site.name}
               </span>
             )}
           </div>
@@ -795,30 +898,30 @@ export default function Dashboard() {
                 ? `Last activity ${sharkActivity.daysSinceLastActivity} day(s) ago`
                 : "No recent activity recorded"}
             </span>
-            <span className="text-xs text-ocean-600">
+            <span className="text-[10px] text-ocean-600">
               Source: {sharkActivity.source}
             </span>
           </div>
 
           {sharkActivity.source === "seed" && (
-            <div className="rounded-lg bg-yellow-500/10 border border-yellow-500/20 p-2.5 mb-3">
-              <p className="text-[11px] text-yellow-400">
+            <div className="rounded-xl bg-yellow-500/5 border border-yellow-500/15 p-3 mb-4">
+              <p className="text-[11px] text-yellow-400/80">
                 Showing sample data — SharkSmart has no public API. For live alerts, use the{" "}
-                <a href="https://www.sharksmart.nsw.gov.au/sharksmart-app" target="_blank" rel="noopener noreferrer" className="underline">SharkSmart app</a>.
+                <a href="https://www.sharksmart.nsw.gov.au/sharksmart-app" target="_blank" rel="noopener noreferrer" className="underline hover:text-yellow-300 transition-colors">SharkSmart app</a>.
               </p>
             </div>
           )}
 
           {sharkActivity.alerts.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs text-ocean-400">Recent alerts</p>
+            <div className="space-y-1">
+              <p className="text-[10px] font-semibold text-ocean-400 uppercase tracking-wider mb-2">Recent Alerts</p>
               {sharkActivity.alerts.slice(0, 5).map((alert) => (
                 <div
                   key={alert.id}
-                  className="flex items-start gap-3 py-2 border-t border-ocean-800/50"
+                  className="flex items-start gap-3 py-2.5 px-2 rounded-lg hover:bg-ocean-950/30 transition-colors border-b border-white/[0.03] last:border-0"
                 >
                   <span
-                    className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 mt-0.5 ${riskColor(alert.species === "white" ? "elevated" : "moderate")}`}
+                    className={`text-[10px] font-medium px-2 py-0.5 rounded-full flex-shrink-0 mt-0.5 ${riskColor(alert.species === "white" ? "elevated" : "moderate")}`}
                   >
                     {alert.species}
                   </span>
@@ -837,16 +940,16 @@ export default function Dashboard() {
       </section>
 
       {/* Footer */}
-      <footer className="text-center text-xs text-ocean-600 pb-8">
-        <p>
+      <footer className="text-center pb-10 pt-4">
+        <div className="section-divider mb-6" />
+        <p className="text-[11px] text-ocean-600">
           Generated {new Date(briefing.generatedAt).toLocaleString("en-AU")} ·
           Weather: {dataStatus?.weather?.source ?? "unknown"} ·
           Swell: {dataStatus?.swell?.source ?? "unknown"} ·
           Sharks: {dataStatus?.shark?.source ?? "unknown"}
         </p>
-        <p className="mt-1">
-          Not a safety tool. Always assess conditions yourself before entering
-          the water.
+        <p className="text-[11px] text-ocean-700 mt-2">
+          Not a safety tool. Always assess conditions yourself before entering the water.
         </p>
       </footer>
     </div>
