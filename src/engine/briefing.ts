@@ -371,27 +371,38 @@ function generateSummary(
 
   const visStr = visibility ? `${visibility.metres}m vis` : "vis unknown";
 
+  const visBad = visibility && visibility.metres < 6;
+  const visAwful = visibility && visibility.metres < 3;
+
   if (bestScore >= 8) {
     return `Excellent conditions. ${bestSite.site.name} is firing — ${visStr}, ${swell.current.height}m ${swell.trend} swell. Get in the water.`;
   }
 
   if (bestScore >= 6.5) {
-    const ratingStr = visibility ? `${visibility.rating} vis (${visibility.metres}m)` : "vis unknown";
-    return `Good conditions at ${bestSite.site.name}. ${ratingStr}, ${swell.current.height}m swell. Worth a dive.`;
+    if (visAwful) {
+      return `Conditions look OK on paper but vis is trash (${visibility!.metres}m). ${bestSite.site.name} scored ${bestScore}/10 — wait for the water to clear.`;
+    }
+    if (visBad) {
+      return `Decent conditions at ${bestSite.site.name} but vis is average (${visibility!.metres}m). ${swell.current.height}m swell. Might be worth a look but don't expect much.`;
+    }
+    return `Good conditions at ${bestSite.site.name}. ${visStr}, ${swell.current.height}m swell. Worth a dive.`;
   }
 
   if (bestScore >= 5) {
     const caveat = bestSite.diveScore.concerns.length > 0
-      ? ` Watch out for: ${bestSite.diveScore.concerns[0]}.`
+      ? ` ${bestSite.diveScore.concerns[0]}.`
       : "";
-    return `Fair conditions. ${bestSite.site.name} is your best bet with a ${bestSite.diveScore.overall}/10.${caveat}`;
+    if (visAwful) {
+      return `Water is dirty (${visibility!.metres}m vis) — not worth getting wet. ${bestSite.site.name} scored ${bestScore}/10.${caveat}`;
+    }
+    return `Fair conditions. ${bestSite.site.name} is your best bet at ${bestSite.diveScore.overall}/10.${caveat}`;
   }
 
   if (bestScore >= 3.5) {
-    return `Marginal conditions. ${bestSite.site.name} scored ${bestSite.diveScore.overall}/10. Consider waiting for better conditions unless you're keen.`;
+    return `Marginal conditions. ${bestSite.site.name} scored ${bestSite.diveScore.overall}/10 — not worth the drive unless you're desperate.`;
   }
 
-  return `Poor conditions across all sites. Best option ${bestSite.site.name} only scored ${bestSite.diveScore.overall}/10. Recommend waiting.`;
+  return `Poor conditions across all sites. ${bestSite.site.name} only scored ${bestSite.diveScore.overall}/10. Don't bother today.`;
 }
 
 function suggestBestTime(

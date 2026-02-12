@@ -267,7 +267,7 @@ function generateScoreExplanation(
   input: RankingInput,
   diveScore: DiveScore,
   fit: ConditionsFit,
-  vis: { metres: number; rating: string },
+  vis: { metres: number; rating: string; factors?: { name: string; impact: number; description: string }[] },
   topSpecies: SiteSpecies[],
   sharkRisk: { level: string; score: number }
 ): string {
@@ -314,10 +314,21 @@ function generateScoreExplanation(
     );
   }
 
-  // Visibility
-  parts.push(
-    `Visibility is estimated at ${vis.metres}m (${vis.rating}).`
-  );
+  // Visibility — include swell direction context
+  const visDirFactor = vis.factors?.find((f: { name: string }) => f.name === "Swell Direction");
+  if (visDirFactor && visDirFactor.impact > 0) {
+    parts.push(
+      `Visibility is estimated at ${vis.metres}m (${vis.rating}) — helped by the ${swell.direction} swell direction, which this site is sheltered from.`
+    );
+  } else if (visDirFactor && visDirFactor.impact < 0) {
+    parts.push(
+      `Visibility is estimated at ${vis.metres}m (${vis.rating}) — the ${swell.direction} swell is hitting this site directly, stirring up the bottom.`
+    );
+  } else {
+    parts.push(
+      `Visibility is estimated at ${vis.metres}m (${vis.rating}).`
+    );
+  }
 
   // Tide
   const tideState = tide.currentState.replace("_", " ");

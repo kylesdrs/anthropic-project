@@ -95,18 +95,20 @@ export function calculateDiveScore(input: DiveScoreInput): DiveScore {
 // --- Component scores ---
 
 function scoreVisibility(vis: VisibilityEstimate): number {
-  // Map vis metres to 1-10 score
-  // 15m+ = 10, 12m = 9, 10m = 8, 8m = 7, 6m = 6, 4m = 5, 3m = 4, 2m = 3, 1m = 2, <1m = 1
+  // Map vis metres to 1-10 score, calibrated for spearfishing.
+  // You need to see the fish to shoot them — sub-8m is hard work,
+  // sub-5m is basically not worth the dive for pelagics.
   const m = vis.metres;
   if (m >= 15) return 10;
   if (m >= 12) return 9;
   if (m >= 10) return 8;
   if (m >= 8) return 7;
-  if (m >= 6) return 6;
-  if (m >= 4) return 5;
-  if (m >= 3) return 4;
-  if (m >= 2) return 3;
-  if (m >= 1) return 2;
+  if (m >= 6) return 5;
+  if (m >= 5) return 4;
+  if (m >= 4) return 3;
+  if (m >= 3) return 2.5;
+  if (m >= 2) return 2;
+  if (m >= 1) return 1.5;
   return 1;
 }
 
@@ -252,9 +254,9 @@ function collectReasons(input: DiveScoreInput): string[] {
   const reasons: string[] = [];
 
   // Visibility
-  if (input.visibility.metres >= 10) {
+  if (input.visibility.metres >= 12) {
     reasons.push(`Excellent vis (${input.visibility.metres}m)`);
-  } else if (input.visibility.metres >= 7) {
+  } else if (input.visibility.metres >= 8) {
     reasons.push(`Good vis (${input.visibility.metres}m)`);
   }
 
@@ -289,8 +291,10 @@ function collectReasons(input: DiveScoreInput): string[] {
 function collectConcerns(input: DiveScoreInput): string[] {
   const concerns: string[] = [];
 
-  if (input.visibility.metres < 4) {
-    concerns.push(`Low vis (${input.visibility.metres}m)`);
+  if (input.visibility.metres < 3) {
+    concerns.push(`Terrible vis (${input.visibility.metres}m) — can't see fish`);
+  } else if (input.visibility.metres < 6) {
+    concerns.push(`Poor vis (${input.visibility.metres}m) — hard to spear in this`);
   }
 
   if (
