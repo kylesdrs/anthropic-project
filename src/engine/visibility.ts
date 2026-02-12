@@ -48,7 +48,7 @@ export interface VisibilityFactor {
 
 // --- Constants ---
 
-const BASELINE_VIS = 3; // metres — Northern Beaches realistic median vis
+const BASELINE_VIS = 4; // metres — Northern Beaches realistic median vis
 const MIN_VIS = 0.3;
 const MAX_VIS = 15;
 
