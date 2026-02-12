@@ -69,10 +69,21 @@ export function estimateVisibility(
   vis += rainImpact.impact;
   factors.push(rainImpact);
 
-  // --- 2. Swell impact ---
+  // --- 2. Swell impact (base, before direction adjustment) ---
   const swellImpact = calculateSwellImpact(input.swell, input.swellTrend);
   vis += swellImpact.impact;
   factors.push(swellImpact);
+
+  // --- 2b. Swell direction vs site exposure ---
+  if (site) {
+    const dirImpact = calculateSwellDirectionImpact(
+      input.swell,
+      site,
+      swellImpact.impact
+    );
+    vis += dirImpact.impact;
+    factors.push(dirImpact);
+  }
 
   // --- 3. Wind direction (use effective wind: higher of sustained and 75% of gust) ---
   const effectiveWind = Math.max(input.windSpeed, (input.windGust ?? 0) * 0.75);
@@ -216,6 +227,85 @@ function calculateSwellImpact(
   }
 
   return { name: "Swell", impact, description };
+}
+
+/**
+ * Adjust swell vis impact based on whether the site is sheltered from
+ * or exposed to the current swell direction.
+ *
+ * A site sheltered from the swell direction (e.g. Bluefish Point in S swell)
+ * gets most of the swell penalty removed because wave energy can't reach it.
+ * A site directly exposed gets a small extra penalty.
+ */
+function calculateSwellDirectionImpact(
+  swell: SwellReading,
+  site: DiveSite,
+  baseSwellImpact: number
+): VisibilityFactor {
+  const dir = normaliseDirection(swell.direction);
+  const protectedDirs = site.bestConditions.swellDirectionProtected;
+  const exposedDirs = site.exposure;
+
+  // If the swell impact was positive (very small swell = calm), direction doesn't matter
+  if (baseSwellImpact >= 0) {
+    return {
+      name: "Swell Direction",
+      impact: 0,
+      description: `${swell.direction} swell — negligible swell, direction doesn't matter`,
+    };
+  }
+
+  // Check if swell direction is one the site is sheltered from
+  if (isDirectionInList(dir, protectedDirs)) {
+    // Sheltered: recover 65% of the swell penalty (the headland blocks most energy)
+    const recovery = Math.abs(baseSwellImpact) * 0.65;
+    return {
+      name: "Swell Direction",
+      impact: Math.round(recovery * 10) / 10,
+      description: `${swell.direction} swell — ${site.name} is sheltered from this direction, much less bottom disturbance`,
+    };
+  }
+
+  // Check if swell direction directly hits the site
+  if (isDirectionInList(dir, exposedDirs)) {
+    // Exposed: small extra penalty (swell hits the site head-on)
+    const extra = Math.abs(baseSwellImpact) * 0.15;
+    return {
+      name: "Swell Direction",
+      impact: -Math.round(extra * 10) / 10,
+      description: `${swell.direction} swell — ${site.name} is directly exposed, full swell energy hitting the reef`,
+    };
+  }
+
+  // Adjacent / partial shelter — modest recovery
+  const partialRecovery = Math.abs(baseSwellImpact) * 0.3;
+  return {
+    name: "Swell Direction",
+    impact: Math.round(partialRecovery * 10) / 10,
+    description: `${swell.direction} swell — ${site.name} is partially sheltered from this direction`,
+  };
+}
+
+/**
+ * Normalise compass direction to primary 8-point (N, NE, E, SE, S, SW, W, NW).
+ * e.g. "SSE" → "SE", "NNW" → "NW", "ESE" → "E"
+ */
+function normaliseDirection(dir: string): string {
+  const map: Record<string, string> = {
+    N: "N", NNE: "NE", NE: "NE", ENE: "E",
+    E: "E", ESE: "SE", SE: "SE", SSE: "S",
+    S: "S", SSW: "SW", SW: "SW", WSW: "W",
+    W: "W", WNW: "NW", NW: "NW", NNW: "N",
+  };
+  return map[dir] ?? dir;
+}
+
+/**
+ * Check if a normalised direction matches any in a list of directions.
+ * Also normalises the list entries for consistent matching.
+ */
+function isDirectionInList(dir: string, list: string[]): boolean {
+  return list.some((d) => normaliseDirection(d) === dir);
 }
 
 function calculateWindImpact(
