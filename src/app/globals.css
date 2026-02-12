@@ -4,7 +4,7 @@
 
 :root {
   --foreground: #e2e8f0;
-  --background: #060e1a;
+  --background: #021019;
 }
 
 /* ── Animated ocean gradient background ─────────────────────── */
@@ -15,57 +15,63 @@ body {
   overflow-x: hidden;
 }
 
-/* Multi-layer animated ocean background */
+/* Primary deep-teal gradient layer */
 body::before {
   content: "";
   position: fixed;
-  inset: 0;
+  inset: -120px;
   z-index: -2;
   background:
-    radial-gradient(ellipse 80% 50% at 15% 10%, rgba(0, 65, 89, 0.25) 0%, transparent 55%),
-    radial-gradient(ellipse 70% 60% at 85% 85%, rgba(0, 98, 130, 0.18) 0%, transparent 50%),
-    radial-gradient(ellipse 60% 70% at 50% 40%, rgba(13, 148, 136, 0.10) 0%, transparent 55%),
-    radial-gradient(ellipse 90% 40% at 70% 15%, rgba(6, 78, 59, 0.12) 0%, transparent 50%);
-  animation: ocean-drift 16s ease-in-out infinite alternate;
+    radial-gradient(ellipse 70% 55% at 20% 15%, rgba(14, 77, 69, 0.15) 0%, transparent 70%),
+    radial-gradient(ellipse 60% 65% at 78% 80%, rgba(19, 78, 74, 0.13) 0%, transparent 65%),
+    radial-gradient(ellipse 85% 45% at 50% 45%, rgba(11, 47, 46, 0.16) 0%, transparent 60%),
+    radial-gradient(ellipse 55% 70% at 68% 20%, rgba(14, 77, 69, 0.12) 0%, transparent 55%);
+  filter: blur(120px);
+  animation: ocean-drift 24s ease-in-out infinite alternate;
 }
 
-/* Second layer for depth and movement */
+/* Secondary layer for depth and slow movement */
 body::after {
   content: "";
   position: fixed;
-  inset: 0;
+  inset: -120px;
   z-index: -1;
   background:
-    radial-gradient(ellipse 50% 80% at 30% 70%, rgba(0, 123, 166, 0.08) 0%, transparent 60%),
-    radial-gradient(ellipse 40% 50% at 75% 25%, rgba(13, 148, 136, 0.06) 0%, transparent 50%);
-  animation: ocean-drift-secondary 22s ease-in-out infinite alternate;
+    radial-gradient(ellipse 55% 75% at 35% 65%, rgba(11, 47, 46, 0.14) 0%, transparent 65%),
+    radial-gradient(ellipse 45% 55% at 72% 30%, rgba(14, 77, 69, 0.10) 0%, transparent 55%),
+    radial-gradient(ellipse 65% 50% at 15% 85%, rgba(19, 78, 74, 0.12) 0%, transparent 60%);
+  filter: blur(140px);
+  animation: ocean-drift-secondary 30s ease-in-out infinite alternate;
 }
 
 @keyframes ocean-drift {
   0% {
-    background-position: 0% 0%, 100% 100%, 50% 50%, 70% 15%;
+    transform: translate(0, 0) scale(1);
     opacity: 1;
   }
   33% {
-    opacity: 0.8;
+    opacity: 0.85;
   }
   66% {
-    opacity: 0.9;
+    opacity: 0.92;
   }
   100% {
-    background-position: 8% 15%, 92% 75%, 45% 55%, 65% 25%;
+    transform: translate(30px, 20px) scale(1.03);
     opacity: 1;
   }
 }
 
 @keyframes ocean-drift-secondary {
   0% {
-    background-position: 30% 70%, 75% 25%;
-    opacity: 0.7;
+    transform: translate(0, 0) scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 0.95;
   }
   100% {
-    background-position: 35% 60%, 70% 35%;
-    opacity: 1;
+    transform: translate(-20px, 15px) scale(1.02);
+    opacity: 0.85;
   }
 }
 
@@ -156,25 +162,25 @@ body::after {
 }
 
 /* Color variants for the sonar */
-.sonar-green { color: rgba(52, 211, 153, 0.5); }
-.sonar-teal { color: rgba(45, 212, 191, 0.5); }
-.sonar-yellow { color: rgba(250, 204, 21, 0.4); }
-.sonar-orange { color: rgba(251, 146, 60, 0.4); }
-.sonar-red { color: rgba(248, 113, 113, 0.4); }
+.sonar-green { color: rgba(16, 150, 120, 0.45); }
+.sonar-teal { color: rgba(14, 120, 100, 0.45); }
+.sonar-yellow { color: rgba(202, 168, 28, 0.35); }
+.sonar-orange { color: rgba(200, 120, 50, 0.35); }
+.sonar-red { color: rgba(200, 90, 90, 0.35); }
 
 /* ── Hero card (elevated from normal glass card) ───────────── */
 .hero-card {
-  background: rgba(10, 22, 40, 0.7);
+  background: rgba(4, 18, 24, 0.75);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 1.25rem;
   position: relative;
   z-index: 1;
   box-shadow:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.04),
-    0 4px 40px rgba(0, 0, 0, 0.3),
-    0 0 0 1px rgba(0, 0, 0, 0.1);
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.03),
+    0 4px 40px rgba(0, 0, 0, 0.35),
+    0 0 0 1px rgba(0, 0, 0, 0.12);
   transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
@@ -185,34 +191,34 @@ body::after {
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  background: radial-gradient(ellipse 80% 50% at 50% 0%, rgba(45, 212, 191, 0.04) 0%, transparent 70%);
+  background: radial-gradient(ellipse 80% 50% at 50% 0%, rgba(14, 77, 69, 0.06) 0%, transparent 70%);
 }
 
 /* Hero glow variants (score-tier colored outer + inner glow) */
 .hero-glow-green {
   box-shadow:
-    inset 0 1px 0 0 rgba(52, 211, 153, 0.08),
-    0 4px 40px rgba(52, 211, 153, 0.08);
+    inset 0 1px 0 0 rgba(16, 120, 96, 0.10),
+    0 4px 40px rgba(16, 120, 96, 0.08);
 }
 .hero-glow-teal {
   box-shadow:
-    inset 0 1px 0 0 rgba(45, 212, 191, 0.08),
-    0 4px 40px rgba(45, 212, 191, 0.08);
+    inset 0 1px 0 0 rgba(14, 77, 69, 0.10),
+    0 4px 40px rgba(14, 77, 69, 0.08);
 }
 .hero-glow-yellow {
   box-shadow:
-    inset 0 1px 0 0 rgba(250, 204, 21, 0.06),
-    0 4px 40px rgba(250, 204, 21, 0.06);
+    inset 0 1px 0 0 rgba(202, 168, 28, 0.06),
+    0 4px 40px rgba(202, 168, 28, 0.05);
 }
 .hero-glow-orange {
   box-shadow:
-    inset 0 1px 0 0 rgba(251, 146, 60, 0.06),
-    0 4px 40px rgba(251, 146, 60, 0.06);
+    inset 0 1px 0 0 rgba(200, 120, 50, 0.06),
+    0 4px 40px rgba(200, 120, 50, 0.05);
 }
 .hero-glow-red {
   box-shadow:
-    inset 0 1px 0 0 rgba(248, 113, 113, 0.06),
-    0 4px 40px rgba(248, 113, 113, 0.06);
+    inset 0 1px 0 0 rgba(200, 90, 90, 0.06),
+    0 4px 40px rgba(200, 90, 90, 0.05);
 }
 
 /* ── Staggered fade-in animation ────────────────────────────── */
@@ -268,10 +274,10 @@ body::after {
 
 /* ── Glass card base ────────────────────────────────────────── */
 .glass-card {
-  background: rgba(10, 22, 40, 0.6);
+  background: rgba(4, 18, 24, 0.65);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 1rem;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
   position: relative;
@@ -279,25 +285,25 @@ body::after {
 }
 
 .glass-card:hover {
-  border-color: rgba(255, 255, 255, 0.1);
-  box-shadow: 0 0 20px rgba(0, 152, 204, 0.06);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 24px rgba(14, 77, 69, 0.08);
 }
 
 /* ── Subtle glow for score badges ───────────────────────────── */
 .score-glow-green {
-  box-shadow: 0 0 20px rgba(52, 211, 153, 0.2);
+  box-shadow: 0 0 20px rgba(16, 150, 120, 0.18);
 }
 .score-glow-teal {
-  box-shadow: 0 0 20px rgba(45, 212, 191, 0.2);
+  box-shadow: 0 0 20px rgba(14, 120, 100, 0.18);
 }
 .score-glow-yellow {
-  box-shadow: 0 0 20px rgba(250, 204, 21, 0.15);
+  box-shadow: 0 0 20px rgba(202, 168, 28, 0.12);
 }
 .score-glow-orange {
-  box-shadow: 0 0 20px rgba(251, 146, 60, 0.15);
+  box-shadow: 0 0 20px rgba(200, 120, 50, 0.12);
 }
 .score-glow-red {
-  box-shadow: 0 0 20px rgba(248, 113, 113, 0.15);
+  box-shadow: 0 0 20px rgba(200, 90, 90, 0.12);
 }
 
 /* ── Section divider ────────────────────────────────────────── */
