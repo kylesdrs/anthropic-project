@@ -61,9 +61,21 @@ export default function RootLayout({
       </head>
       <body className="bg-ocean-950 text-ocean-100 min-h-screen antialiased">
         <div className="grain-overlay" aria-hidden="true" />
+        <div className="contour-overlay" aria-hidden="true">
+          <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+            <defs>
+              <pattern id="contour" width="120" height="120" patternUnits="userSpaceOnUse" patternTransform="rotate(-15)">
+                <path d="M0,60 Q30,45 60,60 Q90,75 120,60" fill="none" stroke="rgba(45,212,191,0.5)" strokeWidth="0.5"/>
+                <path d="M0,30 Q30,15 60,30 Q90,45 120,30" fill="none" stroke="rgba(0,152,204,0.4)" strokeWidth="0.5"/>
+                <path d="M0,90 Q30,75 60,90 Q90,105 120,90" fill="none" stroke="rgba(0,152,204,0.3)" strokeWidth="0.5"/>
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#contour)"/>
+          </svg>
+        </div>
         <RegisterSW />
         <Header />
-        <main className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <main className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
           {children}
         </main>
       </body>

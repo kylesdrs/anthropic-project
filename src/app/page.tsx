@@ -124,6 +124,18 @@ interface SharkAlert {
   details: string;
 }
 
+// --- Site map data (Northern Beaches coastline) ---
+
+const SITE_COORDS: { id: string; name: string; x: number; y: number }[] = [
+  { id: "north-head",           name: "North Head",          x: 78, y: 92 },
+  { id: "bluefish-point",       name: "Bluefish Point",      x: 73, y: 80 },
+  { id: "freshwater-headland",  name: "Freshwater",          x: 71, y: 72 },
+  { id: "curl-curl-headland",   name: "Curl Curl",           x: 68, y: 62 },
+  { id: "dee-why-head",         name: "Dee Why Head",        x: 72, y: 48 },
+  { id: "long-reef",            name: "Long Reef",           x: 80, y: 38 },
+  { id: "narrabeen-head",       name: "Narrabeen Head",      x: 73, y: 24 },
+];
+
 // --- Helpers ---
 
 function scoreColor(score: number): string {
@@ -191,17 +203,12 @@ function formatTime(iso: string): string {
   }
 }
 
-function relativeDate(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
-  const hours = Math.floor(ms / (1000 * 60 * 60));
-  if (hours < 1) return "just now";
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
-
-function alertTypeLabel(type: string): string {
-  return type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+function heroGlow(score: number): string {
+  if (score >= 8) return "shadow-[inset_0_1px_0_0_rgba(52,211,153,0.08),0_4px_40px_rgba(52,211,153,0.08)]";
+  if (score >= 6.5) return "shadow-[inset_0_1px_0_0_rgba(45,212,191,0.08),0_4px_40px_rgba(45,212,191,0.08)]";
+  if (score >= 5) return "shadow-[inset_0_1px_0_0_rgba(250,204,21,0.06),0_4px_40px_rgba(250,204,21,0.06)]";
+  if (score >= 3.5) return "shadow-[inset_0_1px_0_0_rgba(251,146,60,0.06),0_4px_40px_rgba(251,146,60,0.06)]";
+  return "shadow-[inset_0_1px_0_0_rgba(248,113,113,0.06),0_4px_40px_rgba(248,113,113,0.06)]";
 }
 
 // --- Skeleton Loading ---
@@ -264,14 +271,87 @@ function SkeletonLoader() {
 
 function SectionHeader({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
-    <div className="mb-4">
-      <div className="section-divider mb-4" />
-      <h2 className="text-xs font-semibold uppercase tracking-[0.15em] text-ocean-400">
+    <div className="mb-5 pt-2">
+      <div className="section-divider mb-5" />
+      <h2 className="text-sm font-semibold uppercase tracking-[0.15em] text-ocean-300">
         {title}
       </h2>
       {subtitle && (
-        <p className="text-[11px] text-ocean-600 mt-0.5">{subtitle}</p>
+        <p className="text-[11px] text-ocean-500 mt-1">{subtitle}</p>
       )}
+    </div>
+  );
+}
+
+// --- Site Map ---
+
+function SiteMap({ rankings }: { rankings: SiteRanking[] }) {
+  const rankedIds = new Map(rankings.map((r) => [r.site.id, r]));
+
+  return (
+    <div className="glass-card p-5 overflow-hidden">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-ocean-400 mb-3">
+        Northern Beaches
+      </p>
+      <div className="relative w-full" style={{ paddingBottom: "110%" }}>
+        <svg
+          viewBox="0 0 100 110"
+          className="absolute inset-0 w-full h-full"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          {/* Simplified coastline path */}
+          <path
+            d="M82,95 C80,90 76,85 74,80 C72,76 70,73 69,70 C67,65 66,62 67,58 C68,53 70,50 71,46 C73,42 77,39 80,36 C78,32 75,28 73,24 C71,20 70,16 70,12"
+            fill="none"
+            stroke="rgba(45,212,191,0.15)"
+            strokeWidth="1"
+            strokeLinecap="round"
+          />
+          {/* Ocean area hint */}
+          <path
+            d="M82,95 C80,90 76,85 74,80 C72,76 70,73 69,70 C67,65 66,62 67,58 C68,53 70,50 71,46 C73,42 77,39 80,36 C78,32 75,28 73,24 C71,20 70,16 70,12 L100,12 L100,95 Z"
+            fill="rgba(0,152,204,0.03)"
+          />
+          {/* Site dots and labels */}
+          {SITE_COORDS.map((site) => {
+            const ranking = rankedIds.get(site.id);
+            const score = ranking?.diveScore.overall ?? 0;
+            const isTop = ranking?.rank === 1;
+            const dotColor = score >= 8 ? "#34d399" : score >= 6.5 ? "#2dd4bf" : score >= 5 ? "#facc15" : score >= 3.5 ? "#fb923c" : "#f87171";
+            return (
+              <g key={site.id} className="map-dot">
+                {/* Glow ring for #1 */}
+                {isTop && (
+                  <circle cx={site.x} cy={site.y} r="4" fill="none" stroke={dotColor} strokeWidth="0.5" opacity="0.4" />
+                )}
+                <circle cx={site.x} cy={site.y} r={isTop ? 2.5 : 1.8} fill={dotColor} opacity={isTop ? 1 : 0.7} />
+                {/* Label */}
+                <text
+                  x={site.x - 4}
+                  y={site.y - 4}
+                  textAnchor="end"
+                  className="fill-ocean-400"
+                  style={{ fontSize: "3.2px", fontFamily: "system-ui" }}
+                >
+                  {site.name}
+                </text>
+                {/* Rank badge */}
+                {ranking && (
+                  <text
+                    x={site.x + 4}
+                    y={site.y + 1.2}
+                    textAnchor="start"
+                    style={{ fontSize: "3px", fontFamily: "system-ui", fontWeight: 700 }}
+                    fill={dotColor}
+                  >
+                    #{ranking.rank}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+      </div>
     </div>
   );
 }
@@ -636,7 +716,7 @@ export default function Dashboard() {
   }
 
   const { conditions, visibility, siteRankings, recommendation, dataStatus } = briefing;
-  const { weather, swell, sharkActivity } = conditions;
+  const { weather, swell } = conditions;
   const obs = weather?.observation ?? null;
   const topScore = siteRankings[0]?.diveScore.overall ?? 0;
 
@@ -644,11 +724,10 @@ export default function Dashboard() {
   const unavailableSources = [
     !dataStatus?.weather?.available && "Weather (BOM)",
     !dataStatus?.swell?.available && "Swell",
-    dataStatus?.shark?.source === "seed" && "Shark activity (using sample data)",
   ].filter(Boolean) as string[];
 
   return (
-    <div className="space-y-10 animate-fade-in-up">
+    <div className="space-y-12 animate-fade-in-up">
       {/* Controls bar */}
       <div className="flex items-center justify-center gap-3">
         <select
@@ -714,28 +793,28 @@ export default function Dashboard() {
       )}
 
       {/* Hero: Recommendation */}
-      <section className={`glass-card p-6 sm:p-8 ${scoreBorderAccent(topScore)} ${scoreGlow(topScore)}`}>
-        <div className="flex flex-col sm:flex-row items-center gap-6">
-          <div className="text-center sm:text-left flex-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-ocean-400 mb-3">
+      <section className={`hero-card p-7 sm:p-10 ${scoreBorderAccent(topScore)} ${heroGlow(topScore)}`}>
+        <div className="relative z-10 flex flex-col sm:flex-row items-center gap-8">
+          <div className="text-center sm:text-left flex-1 space-y-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ocean-400">
               Dive Briefing · {briefing.timeOfDay}
             </p>
-            <p className="text-lg sm:text-xl text-white font-semibold mb-2 leading-snug text-balance">
+            <h2 className="text-xl sm:text-2xl text-white font-bold leading-snug text-balance">
               {recommendation.summary}
-            </p>
-            <p className="text-sm text-ocean-300">
+            </h2>
+            <p className="text-sm text-ocean-300/80 leading-relaxed">
               {recommendation.bestTimeWindow}
             </p>
           </div>
           <div className="text-center flex-shrink-0">
             <div className={`sonar-wrapper ${sonarColor(topScore)} inline-block`}>
-              <div className={`inline-flex flex-col items-center px-5 py-4 rounded-2xl bg-ocean-950/60 ${scoreGlow(topScore)}`}>
+              <div className={`inline-flex flex-col items-center px-6 py-5 rounded-2xl bg-ocean-950/70 border border-white/[0.06] ${scoreGlow(topScore)}`}>
                 <div
                   className={`text-5xl sm:text-6xl font-bold leading-none ${scoreColor(topScore)}`}
                 >
                   {siteRankings[0]?.diveScore.overall ?? "—"}
                 </div>
-                <p className="text-[11px] text-ocean-400 mt-1.5 font-medium">
+                <p className="text-[11px] text-ocean-400 mt-2 font-medium">
                   {siteRankings[0]?.diveScore.label ?? "—"}
                 </p>
                 <p className="text-[10px] text-ocean-500 mt-0.5">
@@ -747,11 +826,11 @@ export default function Dashboard() {
         </div>
 
         {/* Key factors */}
-        <div className="flex flex-wrap gap-2 mt-5 pt-4 border-t border-white/[0.04]">
+        <div className="relative z-10 flex flex-wrap gap-2 mt-6 pt-5 border-t border-white/[0.05]">
           {recommendation.keyFactors.map((f, i) => (
             <span
               key={i}
-              className="text-[11px] px-3 py-1.5 rounded-full bg-ocean-950/60 text-ocean-300 border border-white/[0.04]"
+              className="text-[11px] px-3 py-1.5 rounded-full bg-ocean-950/60 text-ocean-300 border border-white/[0.05]"
             >
               {f}
             </span>
@@ -838,14 +917,19 @@ export default function Dashboard() {
         </section>
       )}
 
-      {/* Site Rankings */}
+      {/* Site Rankings + Map */}
       <section>
         <SectionHeader title="Site Rankings" subtitle={`${siteRankings.length} sites ranked by conditions`} />
         {siteRankings.length > 0 ? (
-          <div className="grid gap-4 sm:grid-cols-2 stagger-children">
-            {siteRankings.map((ranking) => (
-              <SiteCard key={ranking.site.id} ranking={ranking} conditions={conditions} />
-            ))}
+          <div className="grid gap-4 lg:grid-cols-[1fr_260px]">
+            <div className="grid gap-4 sm:grid-cols-2 stagger-children">
+              {siteRankings.map((ranking) => (
+                <SiteCard key={ranking.site.id} ranking={ranking} conditions={conditions} />
+              ))}
+            </div>
+            <div className="hidden lg:block">
+              <SiteMap rankings={siteRankings} />
+            </div>
           </div>
         ) : (
           <div className="glass-card p-8 text-center">
@@ -884,79 +968,13 @@ export default function Dashboard() {
         </section>
       )}
 
-      {/* Safety Panel */}
-      <section>
-        <SectionHeader title="Shark Activity" />
-        <div className="glass-card p-5">
-          <div className="flex items-center gap-3 mb-4">
-            <span className="text-sm font-semibold text-white">Risk Level</span>
-            {siteRankings[0]?.sharkRisk && (
-              <span className={`text-[11px] font-medium px-2.5 py-1 rounded-full ${riskColor(siteRankings[0].sharkRisk.level)}`}>
-                {siteRankings[0].sharkRisk.level}
-              </span>
-            )}
-            {siteRankings[0] && (
-              <span className="text-[10px] text-ocean-500">
-                at {siteRankings[0].site.name}
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3 mb-4">
-            <span className="text-sm text-ocean-300">
-              {sharkActivity.daysSinceLastActivity !== null
-                ? `Last activity ${sharkActivity.daysSinceLastActivity} day(s) ago`
-                : "No recent activity recorded"}
-            </span>
-            <span className="text-[10px] text-ocean-600">
-              Source: {sharkActivity.source}
-            </span>
-          </div>
-
-          {sharkActivity.source === "seed" && (
-            <div className="rounded-xl bg-yellow-500/5 border border-yellow-500/15 p-3 mb-4">
-              <p className="text-[11px] text-yellow-400/80">
-                Showing sample data — SharkSmart has no public API. For live alerts, use the{" "}
-                <a href="https://www.sharksmart.nsw.gov.au/sharksmart-app" target="_blank" rel="noopener noreferrer" className="underline hover:text-yellow-300 transition-colors">SharkSmart app</a>.
-              </p>
-            </div>
-          )}
-
-          {sharkActivity.alerts.length > 0 && (
-            <div className="space-y-1">
-              <p className="text-[10px] font-semibold text-ocean-400 uppercase tracking-wider mb-2">Recent Alerts</p>
-              {sharkActivity.alerts.slice(0, 5).map((alert) => (
-                <div
-                  key={alert.id}
-                  className="flex items-start gap-3 py-2.5 px-2 rounded-lg hover:bg-ocean-950/30 transition-colors border-b border-white/[0.03] last:border-0"
-                >
-                  <span
-                    className={`text-[10px] font-medium px-2 py-0.5 rounded-full flex-shrink-0 mt-0.5 ${riskColor(alert.species === "white" ? "elevated" : "moderate")}`}
-                  >
-                    {alert.species}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-ocean-200">{alert.details}</p>
-                    <p className="text-[10px] text-ocean-500 mt-0.5">
-                      {alertTypeLabel(alert.type)} · {alert.location.beach} ·{" "}
-                      {relativeDate(alert.date)}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
-
       {/* Footer */}
       <footer className="text-center pb-10 pt-4">
         <div className="section-divider mb-6" />
         <p className="text-[11px] text-ocean-600">
           Generated {new Date(briefing.generatedAt).toLocaleString("en-AU")} ·
           Weather: {dataStatus?.weather?.source ?? "unknown"} ·
-          Swell: {dataStatus?.swell?.source ?? "unknown"} ·
-          Sharks: {dataStatus?.shark?.source ?? "unknown"}
+          Swell: {dataStatus?.swell?.source ?? "unknown"}
         </p>
         <p className="text-[11px] text-ocean-700 mt-2">
           Not a safety tool. Always assess conditions yourself before entering the water.
