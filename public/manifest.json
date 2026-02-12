@@ -4,9 +4,10 @@
   "description": "Live dive conditions, site rankings, and species forecasts for Sydney's Northern Beaches",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0a1628",
-  "theme_color": "#0a1628",
+  "background_color": "#041A19",
+  "theme_color": "#041A19",
   "orientation": "portrait-primary",
+  "categories": ["sports", "weather"],
   "icons": [
     {
       "src": "/icons/icon-192.png",
@@ -19,6 +20,12 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    },
+    {
+      "src": "/kingfish-logo.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }
