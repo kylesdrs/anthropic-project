@@ -366,6 +366,48 @@ function parseSSTFromObs(raw: unknown): number | null {
   return null;
 }
 
+/**
+ * Fetch SST from Open-Meteo Marine API as a fallback.
+ * The marine API provides sea_surface_temperature globally.
+ */
+async function fetchSSTFromOpenMeteo(): Promise<number | null> {
+  try {
+    const res = await fetch(
+      "https://marine-api.open-meteo.com/v1/marine?latitude=-33.74&longitude=151.32&hourly=sea_surface_temperature&forecast_days=1&timezone=Australia%2FSydney",
+      { cache: "no-store" }
+    );
+    if (!res.ok) return null;
+
+    const data = (await res.json()) as {
+      hourly?: {
+        time?: string[];
+        sea_surface_temperature?: (number | null)[];
+      };
+    };
+
+    const times = data.hourly?.time;
+    const temps = data.hourly?.sea_surface_temperature;
+    if (!times || !temps || times.length === 0) return null;
+
+    // Find entry closest to now
+    const nowMs = Date.now();
+    let closestIdx = 0;
+    let closestDiff = Infinity;
+    for (let i = 0; i < times.length; i++) {
+      const diff = Math.abs(new Date(times[i]).getTime() - nowMs);
+      if (diff < closestDiff) {
+        closestDiff = diff;
+        closestIdx = i;
+      }
+    }
+
+    const sst = temps[closestIdx];
+    return sst !== null && sst !== undefined ? Math.round(sst * 10) / 10 : null;
+  } catch {
+    return null;
+  }
+}
+
 // --- Main fetch function ---
 
 /**
@@ -391,7 +433,11 @@ export async function fetchWeatherData(): Promise<WeatherConditions | null> {
 
     const observation = parseBomObservation(rawObs);
     const rainfall = parseRainfall(rawObs);
-    const seaSurfaceTemp = parseSSTFromObs(rawObs);
+    let seaSurfaceTemp = parseSSTFromObs(rawObs);
+    // BOM coastal stations often don't report SST — fall back to Open-Meteo
+    if (seaSurfaceTemp === null) {
+      seaSurfaceTemp = await fetchSSTFromOpenMeteo();
+    }
     const tides = await fetchTideData();
 
     return {

@@ -2,8 +2,8 @@
  * Visibility estimation algorithm.
  *
  * Predicts underwater visibility (metres) from environmental factors.
- * Northern Beaches baseline: ~5-8m typical, 10-15m+ on good days,
- * 1-3m after heavy rain or big swell.
+ * Northern Beaches baseline: ~3-5m typical, 8-12m+ on good days,
+ * 0.5-2m after heavy rain or big swell.
  *
  * Primary factors (in order of impact):
  * 1. Rain history — runoff and sediment are the #1 vis killer
@@ -47,7 +47,7 @@ export interface VisibilityFactor {
 
 // --- Constants ---
 
-const BASELINE_VIS = 6; // metres — Northern Beaches realistic average
+const BASELINE_VIS = 5; // metres — Northern Beaches median vis
 const MIN_VIS = 0.5;
 const MAX_VIS = 20;
 
@@ -117,37 +117,37 @@ export function estimateVisibility(
 // --- Individual factor calculations ---
 
 function calculateRainImpact(rainfall: RainfallData): VisibilityFactor {
-  // Heavy recent rain is the #1 vis killer
-  // 10mm+ in 24h = significant impact
-  // Effects linger 2-3 days
+  // Heavy recent rain is the #1 vis killer.
+  // Northern Beaches: even 5mm creates noticeable runoff from lagoons.
+  // Effects linger 2-3 days. Dry spells of 5+ days are needed for good vis.
 
   let impact = 0;
   let description: string;
 
   if (rainfall.last24h >= 20) {
-    impact = -5;
-    description = `Heavy rain last 24h (${rainfall.last24h}mm) — runoff will heavily reduce vis`;
+    impact = -4;
+    description = `Heavy rain last 24h (${rainfall.last24h}mm) — heavy runoff, vis will be terrible`;
   } else if (rainfall.last24h >= 10) {
-    impact = -3.5;
-    description = `Moderate rain last 24h (${rainfall.last24h}mm) — significant runoff`;
+    impact = -3;
+    description = `Moderate rain last 24h (${rainfall.last24h}mm) — significant sediment runoff`;
   } else if (rainfall.last24h >= 5) {
-    impact = -2;
-    description = `Light rain last 24h (${rainfall.last24h}mm) — some runoff`;
+    impact = -1.5;
+    description = `Light rain last 24h (${rainfall.last24h}mm) — some runoff and turbidity`;
   } else if (rainfall.last48h >= 15) {
-    impact = -2;
+    impact = -1.5;
     description = `Rain in last 48h (${rainfall.last48h}mm) — residual turbidity`;
   } else if (rainfall.last72h >= 20) {
     impact = -1;
-    description = `Rain in last 72h (${rainfall.last72h}mm) — some lingering effect`;
+    description = `Rain in last 72h (${rainfall.last72h}mm) — lingering sediment`;
   } else if (rainfall.daysSinceSignificantRain >= 5) {
-    impact = 2;
-    description = `${rainfall.daysSinceSignificantRain} days since significant rain — water has had time to clear`;
+    impact = 1.5;
+    description = `${rainfall.daysSinceSignificantRain} days since significant rain — water has cleared`;
   } else if (rainfall.daysSinceSignificantRain >= 3) {
-    impact = 1;
-    description = `${rainfall.daysSinceSignificantRain} days since rain — clearing`;
+    impact = 0.5;
+    description = `${rainfall.daysSinceSignificantRain} days since rain — still clearing`;
   } else {
     impact = 0;
-    description = "Moderate rain history — neutral effect";
+    description = "Recent rain history — neutral effect";
   }
 
   return { name: "Rainfall", impact, description };
@@ -163,31 +163,33 @@ function calculateSwellImpact(
   let impact = 0;
   let description: string;
 
-  // Wind chop is much worse for vis than clean groundswell at same height
+  // Any swell stirs the bottom and reduces vis.
+  // Wind chop (short period, <8s) is far worse than clean groundswell.
+  // Mid-period (8-12s) is in between.
   if (height >= 2.5) {
-    impact = swellType === "wind-chop" ? -5 : -3;
-    description = `Large ${height}m ${swellType} — heavy bottom disturbance, vis will be poor`;
+    impact = swellType === "wind-chop" ? -4.5 : swellType === "mid-period" ? -3.5 : -2.5;
+    description = `Large ${height}m ${swellType} — heavy bottom disturbance, vis will be very poor`;
   } else if (height >= 1.5) {
-    impact = swellType === "wind-chop" ? -3.5 : -1.5;
-    description = `${height}m ${swellType} — significant turbidity`;
+    impact = swellType === "wind-chop" ? -3 : swellType === "mid-period" ? -2 : -1.5;
+    description = `${height}m ${swellType} — significant turbidity and stirred bottom`;
   } else if (height >= 1.0) {
-    impact = swellType === "wind-chop" ? -2 : -0.5;
+    impact = swellType === "wind-chop" ? -2 : swellType === "mid-period" ? -1 : -0.5;
     description =
       swellType === "wind-chop"
-        ? `${height}m wind chop (${period}s) — messy surface, reduced vis`
-        : `${height}m ${swellType} — some disturbance`;
+        ? `${height}m wind chop (${period}s) — messy surface, poor vis`
+        : `${height}m ${swellType} (${period}s) — bottom disturbance`;
   } else if (height >= 0.5) {
-    impact = swellType === "wind-chop" ? -0.5 : 0.5;
+    impact = swellType === "wind-chop" ? -0.5 : 0;
     description =
       swellType === "wind-chop"
-        ? `Light ${height}m wind chop — slight surface disturbance`
-        : `Light ${height}m swell — good conditions`;
+        ? `Light ${height}m wind chop — some surface disturbance`
+        : `Light ${height}m swell — minimal effect`;
   } else {
-    impact = 1;
-    description = `Small ${height}m swell — minimal disturbance`;
+    impact = 0.5;
+    description = `Very small ${height}m swell — calm conditions`;
   }
 
-  // Building swell means conditions are deteriorating even before height peaks
+  // Building swell = conditions deteriorating before height peaks
   if (trend === "building") {
     impact -= 1;
     description += ". Swell building — water already churning up";
@@ -203,8 +205,9 @@ function calculateWindImpact(
   direction: string,
   speed: number
 ): VisibilityFactor {
-  // Offshore wind (W/NW/SW/SSW) flattens the surface and pushes water out.
+  // Offshore wind (W/NW/SW/SSW) flattens the surface and pushes dirty water out.
   // Onshore (E/NE/SE/SSE) pushes turbid water inshore and creates chop.
+  // Any wind over ~15kt starts degrading conditions regardless of direction.
   const offshore = ["W", "WSW", "SW", "SSW", "WNW", "NW", "NNW"];
   const onshore = ["E", "ESE", "SE", "SSE", "NE", "ENE"];
 
@@ -213,16 +216,16 @@ function calculateWindImpact(
 
   if (speed < 5) {
     impact = 0.5;
-    description = "Very light wind — calm surface conditions";
+    description = "Very light wind — calm, glassy surface";
   } else if (offshore.includes(direction)) {
     if (speed >= 20) {
-      impact = 1;
-      description = `Strong offshore ${direction} ${speed}kt — cleaning surface but strong wind creates some chop`;
+      impact = 0.5;
+      description = `Strong offshore ${direction} ${speed}kt — surface clean but very windy`;
     } else if (speed >= 10) {
-      impact = 1.5;
-      description = `Moderate offshore ${direction} ${speed}kt — flattening surface, improving vis`;
-    } else {
       impact = 1;
+      description = `Moderate offshore ${direction} ${speed}kt — flattening surface, helping vis`;
+    } else {
+      impact = 0.5;
       description = `Light offshore ${direction} ${speed}kt — slightly improving conditions`;
     }
   } else if (onshore.includes(direction)) {
@@ -231,16 +234,16 @@ function calculateWindImpact(
       description = `Strong onshore ${direction} ${speed}kt — heavy chop, pushing dirty water inshore`;
     } else if (speed >= 10) {
       impact = -1.5;
-      description = `Moderate onshore ${direction} ${speed}kt — surface chop and turbidity`;
+      description = `Moderate onshore ${direction} ${speed}kt — chop and turbidity, vis reduced`;
     } else {
       impact = -0.5;
-      description = `Light onshore ${direction} ${speed}kt — slight surface disturbance`;
+      description = `Light onshore ${direction} ${speed}kt — some surface disturbance`;
     }
   } else {
     // N or S — cross shore, still creates chop at higher speeds
     if (speed >= 20) {
       impact = -1.5;
-      description = `Strong ${direction} ${speed}kt — cross-shore but creating significant chop`;
+      description = `Strong ${direction} ${speed}kt — cross-shore creating significant chop`;
     } else if (speed >= 10) {
       impact = -0.5;
       description = `Moderate ${direction} ${speed}kt — some surface disturbance`;
@@ -254,28 +257,29 @@ function calculateWindImpact(
 }
 
 function calculateTideImpact(tides: TideData): VisibilityFactor {
-  // Rising tide generally brings cleaner ocean water inshore
-  // Falling tide pulls dirty lagoon/estuary water out through reefs
+  // Rising tide brings cleaner ocean water inshore (modest help).
+  // Falling tide pulls dirty lagoon/estuary water out through reefs.
+  // Low tide = shallower water = swell stirs bottom more = worse vis.
   let impact = 0;
   let description: string;
 
   switch (tides.currentState) {
     case "rising":
-      impact = 1;
+      impact = 0.5;
       description = "Rising tide — cleaner ocean water pushing inshore";
       break;
     case "high_slack":
       impact = 0.5;
-      description = "High tide slack — water has settled, reasonable vis";
+      description = "High tide slack — deeper water, less bottom disturbance";
       break;
     case "falling":
       impact = -0.5;
       description =
-        "Falling tide — estuary/lagoon outflow can bring dirty water";
+        "Falling tide — lagoon/estuary outflow brings dirty water";
       break;
     case "low_slack":
-      impact = -0.5;
-      description = "Low tide slack — shallower water, more disturbance";
+      impact = -1;
+      description = "Low tide — shallow water means swell stirs bottom more";
       break;
   }
 
@@ -286,37 +290,39 @@ function calculateSeasonImpact(
   month: number,
   sst: number | null
 ): VisibilityFactor {
-  // Summer (Dec-Mar): EAC pushes warm clear water south
+  // Summer (Dec-Mar): EAC sometimes pushes warm clear water south
   // Winter (Jun-Aug): Cooler, often clearer after calm spells
   // Autumn (Apr-May): Transitional, can be excellent
   // Spring (Sep-Nov): Often poorest — plankton blooms, variable
+  //
+  // SST is the best indicator: warm blue EAC water (23°C+) = clear,
+  // but only bumps vis modestly — other factors dominate.
 
   let impact = 0;
   let description: string;
 
-  // Check if EAC influence is present (warm water = clear blue water)
   if (sst !== null && sst >= 23) {
-    impact = 2;
-    description = `Warm SST ${sst}°C suggests EAC influence — likely blue, clear water`;
-  } else if (sst !== null && sst >= 21) {
-    impact = 1;
-    description = `Warm SST ${sst}°C — reasonable clarity`;
-  } else if ([12, 1, 2, 3].includes(month)) {
-    impact = 1;
-    description = "Summer — typically better vis with EAC influence";
-  } else if ([4, 5].includes(month)) {
     impact = 1.5;
-    description =
-      "Autumn — often the best vis of the year, warm water lingers";
+    description = `Warm SST ${sst}°C — EAC influence likely, clearer blue water`;
+  } else if (sst !== null && sst >= 21) {
+    impact = 0.5;
+    description = `SST ${sst}°C — moderate water clarity`;
+  } else if (sst !== null && sst < 18) {
+    impact = -0.5;
+    description = `Cool SST ${sst}°C — cooler water often carries more plankton`;
+  } else if ([12, 1, 2, 3].includes(month)) {
+    impact = 0.5;
+    description = "Summer — slightly better vis when EAC pushes in";
+  } else if ([4, 5].includes(month)) {
+    impact = 1;
+    description = "Autumn — often the best vis of the year";
   } else if ([6, 7, 8].includes(month)) {
     impact = 0;
-    description =
-      "Winter — variable vis, can be excellent on calm days";
+    description = "Winter — variable vis, can be excellent on calm days";
   } else {
     // Spring (Sep-Nov)
     impact = -1;
-    description =
-      "Spring — plankton blooms common, vis can be unpredictable";
+    description = "Spring — plankton blooms common, vis unpredictable";
   }
 
   return { name: "Season", impact, description };
@@ -372,9 +378,9 @@ function determineConfidence(input: VisibilityInput): VisibilityEstimate["confid
 
 function visRating(metres: number): VisibilityEstimate["rating"] {
   if (metres >= 10) return "excellent";
-  if (metres >= 6) return "good";
-  if (metres >= 4) return "fair";
-  if (metres >= 2) return "poor";
+  if (metres >= 5) return "good";
+  if (metres >= 3) return "fair";
+  if (metres >= 1.5) return "poor";
   return "terrible";
 }
 
