@@ -22,11 +22,11 @@ function Header() {
   return (
     <header className="border-b border-ocean-800 bg-ocean-950/80 backdrop-blur-sm sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-14">
+        <div className="flex items-center justify-center h-16">
           <div className="flex items-center gap-3">
-            <img src="/kingfish-logo.png" alt="Kingfish logo" className="h-8 w-8 object-contain" />
-            <h1 className="text-lg font-semibold text-white tracking-tight">
-              Sydney Spearfishing Intel
+            <img src="/kingfish-logo.png" alt="Kingfish logo" className="h-10 w-10 object-contain" />
+            <h1 className="text-2xl font-semibold text-white tracking-tight">
+              Sydney Spearfishing Intel — Daily Briefing
             </h1>
           </div>
           <nav className="hidden sm:flex items-center gap-6 text-sm text-ocean-300">
