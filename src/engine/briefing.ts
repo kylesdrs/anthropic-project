@@ -9,7 +9,12 @@
  */
 
 import { fetchWeatherData, type WeatherConditions } from "../data/bom";
-import { fetchSwellData, type SwellConditions } from "../data/swell";
+import {
+  fetchSwellData,
+  type SwellConditions,
+  type SwellForecastPoint,
+  type WindForecastPoint,
+} from "../data/swell";
 import {
   fetchSharkActivity,
   type SharkActivitySummary,
@@ -102,10 +107,12 @@ export async function generateBriefing(options?: {
     },
   };
 
-  // If a specific hour is requested, override current swell/wind with forecast data
+  // If a specific hour is requested, override current swell/wind with
+  // interpolated forecast data (Willyweather gives 3-hourly entries, so
+  // we interpolate for accuracy at the exact requested hour).
   const forecastHour = options?.hour;
   if (forecastHour !== undefined && swell) {
-    const forecastSwell = findForecastForHour(swell.forecast, forecastHour);
+    const forecastSwell = interpolateSwellForHour(swell.forecast, forecastHour);
     if (forecastSwell) {
       swell.current = {
         timestamp: forecastSwell.timestamp,
@@ -116,7 +123,7 @@ export async function generateBriefing(options?: {
       };
     }
     if (weather && swell.windForecast.length > 0) {
-      const forecastWind = findForecastForHour(swell.windForecast, forecastHour);
+      const forecastWind = interpolateWindForHour(swell.windForecast, forecastHour);
       if (forecastWind) {
         weather.observation.windDirection = forecastWind.direction;
         weather.observation.windSpeed = forecastWind.speed;
@@ -132,6 +139,7 @@ export async function generateBriefing(options?: {
     visibility = estimateVisibility({
       rainfall: weather.rainfall,
       swell: swell.current,
+      swellTrend: swell.trend,
       windDirection: weather.observation.windDirection,
       windSpeed: weather.observation.windSpeed,
       tides: weather.tides,
@@ -179,36 +187,113 @@ export async function generateBriefing(options?: {
 // --- Forecast hour helper ---
 
 /**
- * Find the forecast entry closest to the given AEST hour (0-23) for today.
- * Willyweather timestamps are in AEST format: "2026-02-12 14:00:00"
+ * Convert a Willyweather AEST timestamp to milliseconds.
+ * Handles both "2026-02-12 14:00:00" and ISO formats.
  */
-function findForecastForHour<T extends { timestamp: string }>(
-  entries: T[],
+function toAESTMs(ts: string): number {
+  return new Date(ts.replace(" ", "T") + "+11:00").getTime();
+}
+
+/**
+ * Build the AEST target timestamp for a given hour today.
+ */
+function buildTargetMs(targetHour: number): number {
+  const now = new Date();
+  const aestNow = new Date(now.getTime() + 11 * 60 * 60 * 1000);
+  const todayStr = aestNow.toISOString().slice(0, 10);
+  const targetStr = `${todayStr} ${String(targetHour).padStart(2, "0")}:00:00`;
+  return new Date(targetStr.replace(" ", "T") + "+11:00").getTime();
+}
+
+/**
+ * Interpolate swell forecast for an exact hour.
+ * Willyweather gives 3-hourly entries — this linearly interpolates
+ * between the two surrounding entries for accurate values at any hour.
+ */
+function interpolateSwellForHour(
+  entries: SwellForecastPoint[],
   targetHour: number
-): T | null {
+): SwellForecastPoint | null {
   if (entries.length === 0) return null;
 
-  // Build target date in AEST: today at the requested hour
-  const now = new Date();
-  // Convert to AEST (UTC+11)
-  const aestNow = new Date(now.getTime() + 11 * 60 * 60 * 1000);
-  const todayStr = aestNow.toISOString().slice(0, 10); // "2026-02-12"
-  const targetStr = `${todayStr} ${String(targetHour).padStart(2, "0")}:00:00`;
+  const targetMs = buildTargetMs(targetHour);
 
-  // Find closest entry
-  let closest = entries[0];
-  let closestDiff = Infinity;
+  // Find entries immediately before and after target
+  let before: SwellForecastPoint | null = null;
+  let after: SwellForecastPoint | null = null;
+  let beforeMs = -Infinity;
+  let afterMs = Infinity;
+
   for (const entry of entries) {
-    const diff = Math.abs(
-      new Date(entry.timestamp.replace(" ", "T") + "+11:00").getTime() -
-      new Date(targetStr.replace(" ", "T") + "+11:00").getTime()
-    );
-    if (diff < closestDiff) {
-      closestDiff = diff;
-      closest = entry;
+    const entryMs = toAESTMs(entry.timestamp);
+    if (entryMs <= targetMs && entryMs > beforeMs) {
+      before = entry;
+      beforeMs = entryMs;
+    }
+    if (entryMs > targetMs && entryMs < afterMs) {
+      after = entry;
+      afterMs = entryMs;
     }
   }
-  return closest;
+
+  // If we have both sides, linearly interpolate
+  if (before && after) {
+    const range = afterMs - beforeMs;
+    const t = range > 0 ? (targetMs - beforeMs) / range : 0;
+    return {
+      timestamp: before.timestamp,
+      height: Math.round((before.height + (after.height - before.height) * t) * 10) / 10,
+      period: Math.round(before.period + (after.period - before.period) * t),
+      direction: t < 0.5 ? before.direction : after.direction,
+      directionDeg: Math.round(before.directionDeg + (after.directionDeg - before.directionDeg) * t),
+    };
+  }
+
+  // Only one side available — return the closest entry
+  return before ?? after ?? entries[0];
+}
+
+/**
+ * Interpolate wind forecast for an exact hour.
+ */
+function interpolateWindForHour(
+  entries: WindForecastPoint[],
+  targetHour: number
+): WindForecastPoint | null {
+  if (entries.length === 0) return null;
+
+  const targetMs = buildTargetMs(targetHour);
+
+  let before: WindForecastPoint | null = null;
+  let after: WindForecastPoint | null = null;
+  let beforeMs = -Infinity;
+  let afterMs = Infinity;
+
+  for (const entry of entries) {
+    const entryMs = toAESTMs(entry.timestamp);
+    if (entryMs <= targetMs && entryMs > beforeMs) {
+      before = entry;
+      beforeMs = entryMs;
+    }
+    if (entryMs > targetMs && entryMs < afterMs) {
+      after = entry;
+      afterMs = entryMs;
+    }
+  }
+
+  if (before && after) {
+    const range = afterMs - beforeMs;
+    const t = range > 0 ? (targetMs - beforeMs) / range : 0;
+    return {
+      timestamp: before.timestamp,
+      speed: Math.round(before.speed + (after.speed - before.speed) * t),
+      gust: Math.round(before.gust + (after.gust - before.gust) * t),
+      direction: t < 0.5 ? before.direction : after.direction,
+      directionDeg: Math.round(before.directionDeg + (after.directionDeg - before.directionDeg) * t),
+    };
+  }
+
+  return before ?? after ?? entries[0];
 }
 
 // --- Recommendation logic ---
