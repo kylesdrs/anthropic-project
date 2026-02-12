@@ -371,8 +371,8 @@ function generateSummary(
 
   const visStr = visibility ? `${visibility.metres}m vis` : "vis unknown";
 
-  const visBad = visibility && visibility.metres < 6;
-  const visAwful = visibility && visibility.metres < 3;
+  const visBad = visibility && visibility.metres < 3;
+  const visAwful = visibility && visibility.metres < 1.5;
 
   if (bestScore >= 8) {
     return `Excellent conditions. ${bestSite.site.name} is firing — ${visStr}, ${swell.current.height}m ${swell.trend} swell. Get in the water.`;

@@ -484,10 +484,10 @@ function determineConfidence(input: VisibilityInput): VisibilityEstimate["confid
 }
 
 function visRating(metres: number): VisibilityEstimate["rating"] {
-  if (metres >= 12) return "excellent";
-  if (metres >= 10) return "good";
-  if (metres >= 7) return "fair";
-  if (metres >= 4) return "poor";
+  if (metres >= 8) return "excellent";
+  if (metres >= 5) return "good";
+  if (metres >= 3) return "fair";
+  if (metres >= 1.5) return "poor";
   return "terrible";
 }
 

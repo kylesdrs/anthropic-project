@@ -64,11 +64,21 @@ export function calculateDiveScore(input: DiveScoreInput): DiveScore {
   );
 
   // Weighted average
-  const overall =
+  let overall =
     visScore * 0.3 +
     fishScore * 0.3 +
     safetyScore * 0.25 +
     comfortScore * 0.15;
+
+  // Vis-based cap: you can't have a good dive if you can't see.
+  // Terrible vis (<1.5m) caps the score at 6 — no point being in the water.
+  // Poor vis (<3m) caps at 7.5 — might get lucky on reef fish but pelagics are off.
+  const visRating = input.visibility.rating;
+  if (visRating === "terrible") {
+    overall = Math.min(overall, 6);
+  } else if (visRating === "poor") {
+    overall = Math.min(overall, 7.5);
+  }
 
   // Round to 1 decimal
   const rounded = Math.round(overall * 10) / 10;
