@@ -174,11 +174,14 @@ async function fetchFromWillyweather(): Promise<SwellConditions | null> {
     if (allSwellEntries.length === 0) return null;
 
     // Find the entry closest to now (not just the first one, which may be midnight)
+    // Willyweather timestamps are in AEST (Australia/Sydney) — append timezone
+    // so they parse correctly on Vercel's UTC servers.
+    const toAEST = (dt: string) => new Date(dt.replace(" ", "T") + "+11:00").getTime();
     const nowMs = Date.now();
     let closestSwellIdx = 0;
     let closestSwellDiff = Infinity;
     for (let i = 0; i < allSwellEntries.length; i++) {
-      const diff = Math.abs(new Date(allSwellEntries[i].dateTime).getTime() - nowMs);
+      const diff = Math.abs(toAEST(allSwellEntries[i].dateTime) - nowMs);
       if (diff < closestSwellDiff) {
         closestSwellDiff = diff;
         closestSwellIdx = i;
