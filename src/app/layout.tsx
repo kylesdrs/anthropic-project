@@ -81,7 +81,7 @@ export default function RootLayout({
         </div>
         <RegisterSW />
         <Header />
-        <main className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
+        <main className="relative z-10 max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-10">
           {children}
         </main>
       </body>

@@ -252,11 +252,12 @@ function SiteMap({ rankings }: { rankings: SiteRanking[] }) {
   const rankedIds = new Map(rankings.map((r) => [r.site.id, r]));
 
   return (
-    <div className="glass-card p-5 overflow-hidden">
+    <div className="glass-card p-4 sm:p-5 overflow-hidden">
       <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-ocean-400 mb-3">
         Northern Beaches
       </p>
-      <div className="relative w-full" style={{ paddingBottom: "110%" }}>
+      {/* Shorter on mobile (full-width), taller in desktop sidebar */}
+      <div className="relative w-full pb-[70%] lg:pb-[110%]">
         <svg
           viewBox="0 0 100 110"
           className="absolute inset-0 w-full h-full"
@@ -676,7 +677,7 @@ export default function Dashboard() {
   ].filter(Boolean) as string[];
 
   return (
-    <div className="space-y-12 animate-fade-in-up">
+    <div className="space-y-8 sm:space-y-12 animate-fade-in-up">
       {/* Controls bar */}
       <div className="flex items-center justify-center gap-3">
         <select
@@ -742,8 +743,8 @@ export default function Dashboard() {
       )}
 
       {/* Hero: Recommendation */}
-      <section className={`hero-card p-7 sm:p-10 ${heroGlow(topScore)}`}>
-        <div className="relative z-10 flex flex-col sm:flex-row items-center gap-8">
+      <section className={`hero-card p-5 sm:p-10 ${heroGlow(topScore)}`}>
+        <div className="relative z-10 flex flex-col sm:flex-row items-center gap-5 sm:gap-8">
           <div className="text-center sm:text-left flex-1 space-y-4">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ocean-400">
               Dive Briefing · {briefing.timeOfDay}
@@ -759,7 +760,7 @@ export default function Dashboard() {
             <div className={`sonar-wrapper ${sonarColor(topScore)} inline-block`}>
               <div className={`inline-flex flex-col items-center px-6 py-5 rounded-2xl bg-ocean-950/70 border border-white/[0.06] ${scoreGlow(topScore)}`}>
                 <div
-                  className={`text-5xl sm:text-6xl font-bold leading-none ${scoreColor(topScore)}`}
+                  className={`text-4xl sm:text-6xl font-bold leading-none ${scoreColor(topScore)}`}
                 >
                   {siteRankings[0]?.diveScore.overall ?? "—"}
                 </div>
@@ -871,6 +872,10 @@ export default function Dashboard() {
         <SectionHeader title="Site Rankings" subtitle={`${siteRankings.length} sites ranked by conditions`} />
         {siteRankings.length > 0 ? (
           <div className="grid gap-4 lg:grid-cols-[1fr_260px]">
+            {/* Map: show above cards on mobile, beside them on desktop */}
+            <div className="lg:hidden">
+              <SiteMap rankings={siteRankings} />
+            </div>
             <div className="grid gap-4 sm:grid-cols-2 stagger-children">
               {siteRankings.map((ranking) => (
                 <SiteCard key={ranking.site.id} ranking={ranking} conditions={conditions} />
