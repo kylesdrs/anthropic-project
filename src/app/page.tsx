@@ -7,7 +7,6 @@ import { useEffect, useState } from "react";
 interface DataSourceStatus {
   weather: { available: boolean; source: string };
   swell: { available: boolean; source: string };
-  shark: { available: boolean; source: string };
 }
 
 interface DiveBriefing {
@@ -46,11 +45,6 @@ interface DiveBriefing {
       };
       trend: string;
     } | null;
-    sharkActivity: {
-      alerts: SharkAlert[];
-      daysSinceLastActivity: number | null;
-      source: string;
-    };
   };
   visibility: {
     metres: number;
@@ -76,12 +70,6 @@ interface SiteVisibility {
   factors: { name: string; impact: number; description: string }[];
 }
 
-interface SiteSharkRisk {
-  level: string;
-  score: number;
-  recommendation: string;
-}
-
 interface SiteRanking {
   site: { id: string; name: string; status: string; restrictions: string };
   rank: number;
@@ -105,7 +93,6 @@ interface SiteRanking {
     overallFit: string;
   };
   visibility?: SiteVisibility;
-  sharkRisk?: SiteSharkRisk;
   topSpecies: {
     name: string;
     likelihood: { score: number; reasoning: string };
@@ -113,15 +100,6 @@ interface SiteRanking {
   }[];
   warnings: string[];
   explanation?: string;
-}
-
-interface SharkAlert {
-  id: string;
-  date: string;
-  type: string;
-  species: string;
-  location: { beach: string };
-  details: string;
 }
 
 // --- Site map data (Northern Beaches coastline) ---
@@ -168,21 +146,6 @@ function sonarColor(score: number): string {
   if (score >= 5) return "sonar-yellow";
   if (score >= 3.5) return "sonar-orange";
   return "sonar-red";
-}
-
-function riskColor(level: string): string {
-  switch (level) {
-    case "low":
-      return "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20";
-    case "moderate":
-      return "bg-yellow-500/15 text-yellow-400 border border-yellow-500/20";
-    case "elevated":
-      return "bg-orange-500/15 text-orange-400 border border-orange-500/20";
-    case "high":
-      return "bg-red-500/15 text-red-400 border border-red-500/20";
-    default:
-      return "bg-ocean-800/50 text-ocean-400";
-  }
 }
 
 function likelihoodColor(score: number): string {
@@ -388,7 +351,7 @@ function SiteCard({
   ranking: SiteRanking;
   conditions: DiveBriefing["conditions"];
 }) {
-  const { site, diveScore, conditionsFit, topSpecies, warnings, visibility, sharkRisk, explanation } = ranking;
+  const { site, diveScore, conditionsFit, topSpecies, warnings, visibility, explanation } = ranking;
   const [expanded, setExpanded] = useState(false);
 
   const swell = conditions.swell;
@@ -540,20 +503,6 @@ function SiteCard({
                 </p>
               </div>
 
-              <div className="rounded-xl bg-ocean-950/50 border border-white/[0.03] p-3">
-                <p className="text-[10px] text-ocean-500 mb-1">Shark Risk</p>
-                <p className={`text-sm font-semibold ${
-                  sharkRisk?.level === "low" ? "text-emerald-400" :
-                  sharkRisk?.level === "moderate" ? "text-yellow-400" :
-                  sharkRisk?.level === "elevated" ? "text-orange-400" :
-                  sharkRisk?.level === "high" ? "text-red-400" : "text-ocean-400"
-                }`}>
-                  {sharkRisk ? sharkRisk.level : "—"}
-                </p>
-                <p className="text-[10px] text-ocean-500 mt-0.5">
-                  {sharkRisk ? `Score: ${sharkRisk.score}/100` : "—"}
-                </p>
-              </div>
             </div>
           </div>
 
