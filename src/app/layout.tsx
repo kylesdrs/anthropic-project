@@ -3,7 +3,7 @@ import "./globals.css";
 import RegisterSW from "./components/RegisterSW";
 
 export const viewport: Viewport = {
-  themeColor: "#060e1a",
+  themeColor: "#041A19",
 };
 
 export const metadata: Metadata = {
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 
 function Header() {
   return (
-    <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-ocean-950/70 backdrop-blur-xl">
+    <header className="sticky top-0 z-50 border-b border-white/[0.04] bg-[#041A19]/75 backdrop-blur-xl">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-center h-20 sm:h-24">
           <div className="flex items-center gap-4">
@@ -59,18 +59,24 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/kingfish-logo.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
       </head>
-      <body className="bg-ocean-950 text-ocean-100 min-h-screen antialiased">
+      <body className="bg-[#041A19] text-ocean-100 min-h-screen antialiased">
+        {/* Directional depth layers */}
+        <div className="depth-highlight" aria-hidden="true" />
+        <div className="depth-shadow" aria-hidden="true" />
         <div className="grain-overlay" aria-hidden="true" />
         <div className="contour-overlay" aria-hidden="true">
-          <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+          <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" viewBox="0 0 1440 900">
             <defs>
-              <pattern id="contour" width="120" height="120" patternUnits="userSpaceOnUse" patternTransform="rotate(-15)">
-                <path d="M0,60 Q30,45 60,60 Q90,75 120,60" fill="none" stroke="rgba(45,212,191,0.5)" strokeWidth="0.5"/>
-                <path d="M0,30 Q30,15 60,30 Q90,45 120,30" fill="none" stroke="rgba(0,152,204,0.4)" strokeWidth="0.5"/>
-                <path d="M0,90 Q30,75 60,90 Q90,105 120,90" fill="none" stroke="rgba(0,152,204,0.3)" strokeWidth="0.5"/>
+              {/* Flowing horizontal wave pattern — resembles underwater currents */}
+              <pattern id="wave-current" width="360" height="180" patternUnits="userSpaceOnUse">
+                <path d="M0,30 C60,18 120,42 180,30 C240,18 300,42 360,30" fill="none" stroke="rgba(22,90,79,0.35)" strokeWidth="0.6"/>
+                <path d="M0,60 C90,48 150,72 240,60 C330,48 360,65 360,60" fill="none" stroke="rgba(11,59,54,0.30)" strokeWidth="0.5"/>
+                <path d="M0,90 C70,80 140,100 210,90 C280,80 350,100 360,90" fill="none" stroke="rgba(22,90,79,0.25)" strokeWidth="0.5"/>
+                <path d="M0,120 C80,112 160,128 240,120 C320,112 360,125 360,120" fill="none" stroke="rgba(14,77,69,0.28)" strokeWidth="0.4"/>
+                <path d="M0,150 C100,140 200,160 300,150 C350,145 360,152 360,150" fill="none" stroke="rgba(11,59,54,0.22)" strokeWidth="0.4"/>
               </pattern>
             </defs>
-            <rect width="100%" height="100%" fill="url(#contour)"/>
+            <rect width="100%" height="100%" fill="url(#wave-current)"/>
           </svg>
         </div>
         <RegisterSW />
