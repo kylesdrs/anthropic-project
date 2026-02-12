@@ -204,11 +204,11 @@ function formatTime(iso: string): string {
 }
 
 function heroGlow(score: number): string {
-  if (score >= 8) return "shadow-[inset_0_1px_0_0_rgba(52,211,153,0.08),0_4px_40px_rgba(52,211,153,0.08)]";
-  if (score >= 6.5) return "shadow-[inset_0_1px_0_0_rgba(45,212,191,0.08),0_4px_40px_rgba(45,212,191,0.08)]";
-  if (score >= 5) return "shadow-[inset_0_1px_0_0_rgba(250,204,21,0.06),0_4px_40px_rgba(250,204,21,0.06)]";
-  if (score >= 3.5) return "shadow-[inset_0_1px_0_0_rgba(251,146,60,0.06),0_4px_40px_rgba(251,146,60,0.06)]";
-  return "shadow-[inset_0_1px_0_0_rgba(248,113,113,0.06),0_4px_40px_rgba(248,113,113,0.06)]";
+  if (score >= 8) return "hero-glow-green";
+  if (score >= 6.5) return "hero-glow-teal";
+  if (score >= 5) return "hero-glow-yellow";
+  if (score >= 3.5) return "hero-glow-orange";
+  return "hero-glow-red";
 }
 
 // --- Skeleton Loading ---
@@ -793,7 +793,7 @@ export default function Dashboard() {
       )}
 
       {/* Hero: Recommendation */}
-      <section className={`hero-card p-7 sm:p-10 ${scoreBorderAccent(topScore)} ${heroGlow(topScore)}`}>
+      <section className={`hero-card p-7 sm:p-10 ${heroGlow(topScore)}`}>
         <div className="relative z-10 flex flex-col sm:flex-row items-center gap-8">
           <div className="text-center sm:text-left flex-1 space-y-4">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ocean-400">
