@@ -403,7 +403,7 @@ function generateRecommendation(
   const summary = generateSummary(bestSite, bestScore, siteVis, swell);
 
   // Best time window
-  const bestTimeWindow = suggestBestTime(weather, swell, timeOfDay);
+  const bestTimeWindow = suggestBestTime(weather, swell, timeOfDay, bestScore, siteVis);
 
   // Key factors
   const keyFactors = collectKeyFactors(
@@ -472,8 +472,19 @@ function generateSummary(
 function suggestBestTime(
   weather: WeatherConditions,
   swell: SwellConditions,
-  currentTimeOfDay: string
+  currentTimeOfDay: string,
+  bestScore: number,
+  visibility: VisibilityEstimate | null
 ): string {
+  // If conditions are genuinely bad, don't give optimistic time advice
+  const visAwful = visibility && visibility.metres < 1.5;
+  if (bestScore < 5 || visAwful) {
+    if (swell.trend === "dropping") {
+      return "Swell is dropping — vis may improve later, but don't count on it";
+    }
+    return "Conditions aren't great right now — check back tomorrow or wait for better weather";
+  }
+
   // Rising tide is generally better
   const tideState = weather.tides.currentState;
 

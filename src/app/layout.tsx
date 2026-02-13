@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import RegisterSW from "./components/RegisterSW";
-import InstallPrompt from "./components/InstallPrompt";
 
 export const viewport: Viewport = {
   themeColor: "#041A19",
@@ -81,7 +80,6 @@ export default function RootLayout({
           </svg>
         </div>
         <RegisterSW />
-        <InstallPrompt />
         <Header />
         <main className="relative z-10 max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-10">
           {children}

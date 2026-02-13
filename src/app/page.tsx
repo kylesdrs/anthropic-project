@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+
+// --- PWA Install types ---
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+}
 
 // --- Types (matching API response) ---
 
@@ -836,6 +843,45 @@ export default function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [forecastHour, setForecastHour] = useState<string>("now");
 
+  // PWA install state
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isIOS, setIsIOS] = useState(false);
+  const [isInstalled, setIsInstalled] = useState(false);
+  const [showIOSGuide, setShowIOSGuide] = useState(false);
+
+  useEffect(() => {
+    // Already installed as standalone?
+    if (window.matchMedia("(display-mode: standalone)").matches) {
+      setIsInstalled(true);
+      return;
+    }
+    // iOS detection
+    const ua = navigator.userAgent;
+    const ios = /iPad|iPhone|iPod/.test(ua) && !(window as unknown as { MSStream?: unknown }).MSStream;
+    setIsIOS(ios);
+
+    // Chrome/Edge: capture install prompt
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e as BeforeInstallPromptEvent);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  const handleInstallClick = useCallback(async () => {
+    if (installPrompt) {
+      await installPrompt.prompt();
+      const { outcome } = await installPrompt.userChoice;
+      if (outcome === "accepted") {
+        setIsInstalled(true);
+        setInstallPrompt(null);
+      }
+    } else if (isIOS) {
+      setShowIOSGuide((v) => !v);
+    }
+  }, [installPrompt, isIOS]);
+
   async function fetchBriefing(isRefresh = false, hour?: string) {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
@@ -908,39 +954,60 @@ export default function Dashboard() {
   return (
     <div className="space-y-8 sm:space-y-12 animate-fade-in-up">
       {/* Controls bar */}
-      <div className="flex items-center justify-center gap-3">
-        <select
-          value={forecastHour}
-          onChange={(e) => handleHourChange(e.target.value)}
-          disabled={refreshing}
-          className="px-3 py-2 rounded-xl bg-ocean-900/60 text-white text-sm font-medium border border-white/[0.06] focus:outline-none focus:ring-2 focus:ring-teal-500/40 disabled:opacity-50 backdrop-blur-sm"
-        >
-          {buildTimeOptions().map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-        <button
-          onClick={() => fetchBriefing(true)}
-          disabled={refreshing}
-          className="flex items-center gap-2 px-5 py-2 rounded-xl bg-teal-500/15 text-teal-400 font-medium text-sm border border-teal-500/20 hover:bg-teal-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <svg
-            className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+      <div className="flex flex-col items-center gap-3">
+        <div className="flex items-center justify-center gap-3">
+          <select
+            value={forecastHour}
+            onChange={(e) => handleHourChange(e.target.value)}
+            disabled={refreshing}
+            className="px-3 py-2 rounded-xl bg-ocean-900/60 text-white text-sm font-medium border border-white/[0.06] focus:outline-none focus:ring-2 focus:ring-teal-500/40 disabled:opacity-50 backdrop-blur-sm"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-            />
-          </svg>
-          {refreshing ? "Refreshing..." : "Refresh"}
-        </button>
+            {buildTimeOptions().map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={() => fetchBriefing(true)}
+            disabled={refreshing}
+            className="flex items-center gap-2 px-5 py-2 rounded-xl bg-teal-500/15 text-teal-400 font-medium text-sm border border-teal-500/20 hover:bg-teal-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <svg
+              className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+            {refreshing ? "Refreshing..." : "Refresh"}
+          </button>
+        </div>
+        {/* Download App button — hidden once installed */}
+        {!isInstalled && (installPrompt || isIOS) && (
+          <div className="flex flex-col items-center gap-1.5">
+            <button
+              onClick={handleInstallClick}
+              className="flex items-center gap-2 px-5 py-2 rounded-xl bg-ocean-900/60 text-ocean-300 font-medium text-sm border border-white/[0.06] hover:bg-ocean-800/60 hover:text-white transition-all"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V3" />
+              </svg>
+              Download App
+            </button>
+            {showIOSGuide && (
+              <p className="text-[11px] text-ocean-400 text-center max-w-[260px]">
+                Tap the <span className="font-semibold text-ocean-300">Share</span> button in Safari, then <span className="font-semibold text-ocean-300">Add to Home Screen</span>
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Data availability warning */}
