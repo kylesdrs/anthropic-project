@@ -20,10 +20,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(briefing);
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unknown error";
+    console.error("Briefing generation failed:", error);
     return NextResponse.json(
-      { error: "Failed to generate briefing", detail: message },
+      { error: "Failed to generate briefing" },
       { status: 500 }
     );
   }

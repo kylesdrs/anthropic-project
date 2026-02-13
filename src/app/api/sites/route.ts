@@ -54,10 +54,9 @@ export async function GET() {
       fetchedAt: new Date().toISOString(),
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unknown error";
+    console.error("Sites fetch failed:", error);
     return NextResponse.json(
-      { error: "Failed to fetch sites", detail: message },
+      { error: "Failed to fetch sites" },
       { status: 500 }
     );
   }

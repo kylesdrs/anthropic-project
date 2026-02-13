@@ -24,10 +24,9 @@ export async function GET() {
       fetchedAt: new Date().toISOString(),
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unknown error";
+    console.error("Conditions fetch failed:", error);
     return NextResponse.json(
-      { error: "Failed to fetch conditions", detail: message },
+      { error: "Failed to fetch conditions" },
       { status: 500 }
     );
   }
