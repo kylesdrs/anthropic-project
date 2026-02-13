@@ -845,9 +845,9 @@ export default function Dashboard() {
 
   // PWA install state
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
-  const [isIOS, setIsIOS] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
-  const [showIOSGuide, setShowIOSGuide] = useState(false);
+  const [showInstallGuide, setShowInstallGuide] = useState(false);
+  const [installGuideText, setInstallGuideText] = useState("");
 
   useEffect(() => {
     // Already installed as standalone?
@@ -855,10 +855,6 @@ export default function Dashboard() {
       setIsInstalled(true);
       return;
     }
-    // iOS detection
-    const ua = navigator.userAgent;
-    const ios = /iPad|iPhone|iPod/.test(ua) && !(window as unknown as { MSStream?: unknown }).MSStream;
-    setIsIOS(ios);
 
     // Chrome/Edge: capture install prompt
     const handler = (e: Event) => {
@@ -870,6 +866,7 @@ export default function Dashboard() {
   }, []);
 
   const handleInstallClick = useCallback(async () => {
+    // If the native Chrome/Edge prompt is available, use it
     if (installPrompt) {
       await installPrompt.prompt();
       const { outcome } = await installPrompt.userChoice;
@@ -877,10 +874,26 @@ export default function Dashboard() {
         setIsInstalled(true);
         setInstallPrompt(null);
       }
-    } else if (isIOS) {
-      setShowIOSGuide((v) => !v);
+      return;
     }
-  }, [installPrompt, isIOS]);
+
+    // Otherwise show browser-specific instructions
+    const ua = navigator.userAgent;
+    const isIOS = /iPad|iPhone|iPod/.test(ua);
+    const isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|Chrome/.test(ua);
+    const isChrome = /Chrome/.test(ua) && !/Edge/.test(ua);
+
+    if (isIOS && isSafari) {
+      setInstallGuideText("In Safari: tap the Share button (square with arrow) at the bottom, then tap \"Add to Home Screen\"");
+    } else if (isIOS) {
+      setInstallGuideText("Open this page in Safari, tap the Share button, then \"Add to Home Screen\"");
+    } else if (isChrome) {
+      setInstallGuideText("In Chrome: tap the 3-dot menu at the top right, then \"Install app\" or \"Add to Home Screen\"");
+    } else {
+      setInstallGuideText("Open your browser menu and look for \"Install app\", \"Add to Home Screen\", or \"Create shortcut\"");
+    }
+    setShowInstallGuide((v) => !v);
+  }, [installPrompt]);
 
   async function fetchBriefing(isRefresh = false, hour?: string) {
     if (isRefresh) setRefreshing(true);
@@ -989,8 +1002,8 @@ export default function Dashboard() {
             {refreshing ? "Refreshing..." : "Refresh"}
           </button>
         </div>
-        {/* Download App button — hidden once installed */}
-        {!isInstalled && (installPrompt || isIOS) && (
+        {/* Download App button — hidden once installed as standalone */}
+        {!isInstalled && (
           <div className="flex flex-col items-center gap-1.5">
             <button
               onClick={handleInstallClick}
@@ -1001,9 +1014,9 @@ export default function Dashboard() {
               </svg>
               Download App
             </button>
-            {showIOSGuide && (
-              <p className="text-[11px] text-ocean-400 text-center max-w-[260px]">
-                Tap the <span className="font-semibold text-ocean-300">Share</span> button in Safari, then <span className="font-semibold text-ocean-300">Add to Home Screen</span>
+            {showInstallGuide && (
+              <p className="text-[11px] text-ocean-400 text-center max-w-[280px] leading-relaxed">
+                {installGuideText}
               </p>
             )}
           </div>
