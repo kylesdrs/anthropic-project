@@ -1,8 +1,29 @@
 /**
  * Fish species database and likelihood scoring.
  *
- * Calculates probability of encountering each target species
- * based on current conditions, site structure, and season.
+ * Calculates probability of encountering each target species based on
+ * current conditions, site structure, and season.
+ *
+ * Scoring is grounded in real behaviour observed on Sydney's Northern
+ * Beaches:
+ *
+ *   Season & temperature  — migration timing, spawning runs, EAC pulses
+ *   Water clarity         — species-specific turbidity preference
+ *                           (mulloway hunts dirty water; cobia needs 8m+)
+ *   Current strength      — pelagics track bait through current; demersal
+ *                           fish are largely indifferent
+ *   Wind direction        — offshore wind cleans the water and pushes bait
+ *                           against structure; critical for pelagics
+ *   Swell & bait effect   — E/SE swell aggregates bait at headlands and
+ *                           drop-offs, triggering feeding runs
+ *   Post-rain conditions  — runoff destroys visibility for most species
+ *                           but mulloway actively prefer turbid water
+ *   EAC influence (SST)   — East Australian Current pulses warm clear water
+ *                           south; SST ≥ 23 °C is the single strongest
+ *                           predictor of pelagic activity in Sydney
+ *   Time of day           — feeding windows vary widely per species
+ *   Site structure        — habitat match to the species' preferred holding
+ *   Depth                 — obvious but material (cobia won't be at 3m)
  */
 
 export interface TargetSpecies {
@@ -19,20 +40,67 @@ export interface TargetSpecies {
   nswBagLimit: number;
   nswMinSize: number; // cm
   notes: string;
+
+  // --- Behaviour modifiers ---
+
+  /**
+   * Water clarity preference.
+   *
+   * clear    — pelagics that need to see and be seen (kingfish, bonito, cobia)
+   * moderate — reef fish comfortable in 3-6m but prefer better (snapper, trevally)
+   * dirty    — ambush predators that exploit turbidity (mulloway)
+   * any      — indifferent (flathead)
+   */
+  waterClarityPreference: "clear" | "moderate" | "dirty" | "any";
+
+  /**
+   * EAC sensitivity. Species that track warm, clean EAC water southward.
+   * When SST ≥ 23 °C the EAC is likely inshore — score a bonus.
+   * When SST < 19 °C the EAC has retreated — score a penalty.
+   */
+  eacSensitivity: "high" | "moderate" | "low";
+
+  /**
+   * Offshore-wind response. Species that feed heavily when light offshore
+   * wind cleans the surface and pushes bait against structure.
+   */
+  offshoreWindBonus: boolean;
+
+  /**
+   * Swell-bait aggregation. E/SE swell pushes pelagic bait schools against
+   * headlands and drop-offs. Species that hunt bait benefit from this.
+   * Demersal species that prefer settled reef are slightly hindered.
+   */
+  swellBaitEffect: "positive" | "negative" | "neutral";
+
+  /**
+   * Post-rain response.
+   * positive — mulloway: turbid runoff is their cue to feed
+   * negative — pelagics: dirty water = no vis = they move offshore
+   * neutral  — demersal species not strongly affected
+   */
+  rainResponse: "positive" | "negative" | "neutral";
 }
 
 export interface SpeciesConditions {
   month: number;
-  waterTemp: number;
-  estimatedVis: number;
+  waterTemp: number;           // °C — measured or SST proxy
+  seaSurfaceTemp: number | null; // °C — EAC indicator (higher = EAC pulse)
+  estimatedVis: number;        // metres
   currentStrength: "none" | "light" | "moderate" | "strong";
   timeOfDay: "night" | "dawn" | "morning" | "midday" | "afternoon" | "dusk";
   siteStructure: string[];
-  depth: number;
+  depth: number;               // metres (avg site depth)
+  windDirection: string;       // 16-point compass e.g. "W", "NW", "ESE"
+  windSpeed: number;           // knots (sustained)
+  swellHeight: number;         // metres
+  swellDirection: string;      // 8-point compass e.g. "SE", "S"
+  rainfall24h: number;         // mm in last 24 hours
+  daysSinceRain: number;       // days since significant rain (≥2mm)
 }
 
 export interface SpeciesLikelihood {
-  score: number; // 0-100
+  score: number;       // 0-100
   reasoning: string;
 }
 
@@ -61,6 +129,11 @@ export const targetSpecies: TargetSpecies[] = [
     nswMinSize: 65,
     notes:
       "The king of Sydney spearfishing. Year-round but best Oct-May when water is warmer and bait is inshore. Follow the current — no run, no fun. Around 1 knot is the sweet spot. Often patrol headlands and drop-offs at dawn and dusk. Will follow bait schools tight to the reef. If you can see yakkas, kings aren't far away.",
+    waterClarityPreference: "clear",
+    eacSensitivity: "high",
+    offshoreWindBonus: true,
+    swellBaitEffect: "positive",
+    rainResponse: "negative",
   },
   {
     id: "bonito",
@@ -77,9 +150,14 @@ export const targetSpecies: TargetSpecies[] = [
     timeOfDay: ["dawn", "morning", "afternoon"],
     structure: ["reef edges", "open water", "drop-offs", "bommies"],
     nswBagLimit: 20,
-    nswMinSize: 0, // no minimum size
+    nswMinSize: 0,
     notes:
-      "Fast-moving summer visitors. Often visible from the surface as boiling water when they're chasing bait. School up around reef edges and drop-offs. Need decent current and warm water (21°C+). When bonito are on, they're usually thick — if you find one, there are more. Great eating if bled and iced immediately.",
+      "Fast-moving summer visitors. Often visible from the surface as boiling water when they're chasing bait. School up around reef edges and drop-offs. Need decent current and warm water (21 °C+). When bonito are on, they're usually thick — if you find one, there are more. Great eating if bled and iced immediately.",
+    waterClarityPreference: "clear",
+    eacSensitivity: "high",
+    offshoreWindBonus: true,
+    swellBaitEffect: "positive",
+    rainResponse: "negative",
   },
   {
     id: "snapper",
@@ -106,6 +184,11 @@ export const targetSpecies: TargetSpecies[] = [
     nswMinSize: 30,
     notes:
       "Year-round resident but best April-August during the spawning run when big fish push inshore. Cautious and spook easily — low-light periods are best. Work the ledges, gutters, and caves. They sit tight to structure and will bolt at the first sign of trouble. Approach slow, stay low, and use reef features for concealment. The cooler months are snapper season.",
+    waterClarityPreference: "moderate",
+    eacSensitivity: "low",
+    offshoreWindBonus: false,
+    swellBaitEffect: "negative",
+    rainResponse: "neutral",
   },
   {
     id: "cobia",
@@ -129,7 +212,12 @@ export const targetSpecies: TargetSpecies[] = [
     nswBagLimit: 5,
     nswMinSize: 60,
     notes:
-      "Summer visitor — one of the most exciting encounters in Sydney waters. Often found cruising with rays, turtles, or even sharks. Curious fish that will approach divers if you stay still. Look for them in open water near reef structure, especially at North Head and deeper headland sites. Need warm water (22°C+) and good vis to find them.",
+      "Summer visitor — one of the most exciting encounters in Sydney waters. Often found cruising with rays, turtles, or even sharks. Curious fish that will approach divers if you stay still. Look for them in open water near reef structure, especially at North Head and deeper headland sites. Need warm water (22 °C+) and good vis to find them.",
+    waterClarityPreference: "clear",
+    eacSensitivity: "high",
+    offshoreWindBonus: false,
+    swellBaitEffect: "neutral",
+    rainResponse: "negative",
   },
   {
     id: "flathead",
@@ -151,9 +239,14 @@ export const targetSpecies: TargetSpecies[] = [
       "sand gutters",
     ],
     nswBagLimit: 10,
-    nswMinSize: 36, // 36cm dusky flathead in Sydney
+    nswMinSize: 36,
     notes:
-      "The reliable fallback — always around, in almost any conditions. Ambush predator that buries in sand adjacent to reef. Easier to target in lower vis than pelagics since they sit still. Work the sand patches between reef sections and the sand/reef interface. Often overlooked by spearo targeting pelagics but excellent eating.",
+      "The reliable fallback — always around, in almost any conditions. Ambush predator that buries in sand adjacent to reef. Easier to target in lower vis than pelagics since they sit still. Work the sand patches between reef sections and the sand/reef interface. Often overlooked by spearos targeting pelagics but excellent eating.",
+    waterClarityPreference: "any",
+    eacSensitivity: "low",
+    offshoreWindBonus: false,
+    swellBaitEffect: "neutral",
+    rainResponse: "neutral",
   },
   {
     id: "trevally",
@@ -170,9 +263,14 @@ export const targetSpecies: TargetSpecies[] = [
     timeOfDay: ["dawn", "morning", "afternoon", "dusk"],
     structure: ["reef edges", "gutters", "drop-offs", "bommies", "headlands"],
     nswBagLimit: 20,
-    nswMinSize: 0, // varies by species, no general minimum for most
+    nswMinSize: 0,
     notes:
       "Aggressive reef predators — silver trevally and bluefin trevally are the common Sydney species. Often in schools, which means if you see one, dive down and there will be more. Feed hard around current and bait. Gutters and reef edges are prime spots. More active in warmer months but present year-round. Decent eating, especially silver trevally.",
+    waterClarityPreference: "moderate",
+    eacSensitivity: "moderate",
+    offshoreWindBonus: true,
+    swellBaitEffect: "positive",
+    rainResponse: "negative",
   },
   {
     id: "mulloway",
@@ -198,8 +296,22 @@ export const targetSpecies: TargetSpecies[] = [
     nswMinSize: 45,
     notes:
       "The low-vis specialist. Counterintuitively, mulloway prefer dirty water — they're ambush predators that use turbidity to their advantage. Best targeted at dawn or dusk in the cooler months around deep ledges and gutters. Often found near river mouths and estuary outflows where other species won't be. Winter is prime time. Very spooky — slow, quiet approaches only.",
+    waterClarityPreference: "dirty",
+    eacSensitivity: "low",
+    offshoreWindBonus: false,
+    swellBaitEffect: "neutral",
+    rainResponse: "positive",
   },
 ];
+
+// --- Helpers ---
+
+const OFFSHORE_DIRECTIONS = new Set(["W", "WNW", "WSW", "NW", "NNW", "SW", "SSW"]);
+const ONSHORE_DIRECTIONS = new Set(["E", "ENE", "ESE", "NE", "NNE", "SE", "SSE"]);
+
+// E/SE swell pushes bait schools against Sydney headlands and reef edges.
+// This is the swell direction window that aggregates bait on the Northern Beaches.
+const BAIT_AGGREGATING_SWELL = new Set(["E", "SE", "NE", "ENE", "ESE", "NNE"]);
 
 /**
  * Calculate how likely you are to encounter a species given current conditions.
@@ -226,20 +338,49 @@ export function calculateSpeciesLikelihood(
     reasons.push("Out of season — unlikely to encounter");
   }
 
-  // --- Water temperature (up to ±20) ---
+  // --- EAC / Sea Surface Temperature (up to ±15) ---
+  // The East Australian Current is the dominant factor for pelagic abundance
+  // on the Northern Beaches. When the EAC pushes warm water inshore (SST ≥ 23 °C)
+  // pelagic bait schools aggregate and predators follow. When the EAC retreats
+  // (SST < 19 °C), pelagics move offshore or deeper.
+  const sst = conditions.seaSurfaceTemp ?? conditions.waterTemp;
+  if (species.eacSensitivity === "high") {
+    if (sst >= 23) {
+      score += 15;
+      reasons.push(`SST ${sst}°C — EAC pushing warm bait-rich water inshore`);
+    } else if (sst >= 21) {
+      score += 7;
+      reasons.push(`SST ${sst}°C — warm enough for this species`);
+    } else if (sst < 19) {
+      score -= 12;
+      reasons.push(`SST ${sst}°C — too cold, EAC has retreated offshore`);
+    }
+  } else if (species.eacSensitivity === "moderate") {
+    if (sst >= 23) {
+      score += 8;
+      reasons.push(`SST ${sst}°C — warm water helping conditions`);
+    } else if (sst < 18) {
+      score -= 5;
+      reasons.push(`SST ${sst}°C — cooler than ideal`);
+    }
+  }
+  // "low" EAC sensitivity species (snapper, flathead, mulloway) not affected
+
+  // --- Water temperature (up to ±15) ---
+  // Narrower range than EAC check — this is ambient water temp the fish feel
   const { min: tMin, max: tMax, ideal: tIdeal } = species.tempRange;
   const temp = conditions.waterTemp;
 
   if (temp < tMin || temp > tMax) {
-    score -= 20;
+    score -= 15;
     reasons.push(
-      `Water temp ${temp}°C is outside range (${tMin}-${tMax}°C)`
+      `Water temp ${temp}°C is outside range (${tMin}–${tMax}°C)`
     );
   } else {
     const distFromIdeal = Math.abs(temp - tIdeal);
-    const tempRange = Math.max(tMax - tMin, 1);
-    const tempScore = Math.round(20 * (1 - distFromIdeal / (tempRange / 2)));
-    score += Math.max(tempScore, -10);
+    const halfRange = Math.max((tMax - tMin) / 2, 1);
+    const tempScore = Math.round(15 * (1 - distFromIdeal / halfRange));
+    score += Math.max(tempScore, -8);
     if (distFromIdeal <= 2) {
       reasons.push(`Water temp ${temp}°C is ideal (${tIdeal}°C)`);
     } else {
@@ -249,7 +390,46 @@ export function calculateSpeciesLikelihood(
     }
   }
 
-  // --- Visibility (up to ±15) ---
+  // --- Post-rain / water clarity preference (up to ±15) ---
+  // Mulloway actively hunt in turbid runoff. Pelagics move offshore when
+  // visibility collapses. This is separate from the visibility minimum check
+  // — it scores the *desirability* of current water clarity for this species.
+  const isRecentRain = conditions.rainfall24h >= 3 || conditions.daysSinceRain <= 1;
+  const isDirtyWater = conditions.estimatedVis < 3;
+  const isClearWater = conditions.estimatedVis >= 7;
+
+  if (species.rainResponse === "positive") {
+    // Mulloway: rain and turbidity are a feeding trigger
+    if (isRecentRain && isDirtyWater) {
+      score += 15;
+      reasons.push("Rain runoff and turbid water — prime mulloway conditions");
+    } else if (isRecentRain) {
+      score += 8;
+      reasons.push("Recent rain — increased turbidity favouring this species");
+    } else if (isClearWater) {
+      score -= 8;
+      reasons.push("Clear water — this species prefers turbid conditions");
+    }
+  } else if (species.rainResponse === "negative") {
+    if (isRecentRain && isDirtyWater) {
+      score -= 12;
+      reasons.push("Rain runoff has killed visibility — fish moved offshore");
+    } else if (isRecentRain) {
+      score -= 5;
+      reasons.push("Recent rain reducing water clarity");
+    } else if (conditions.daysSinceRain >= 5 && isClearWater) {
+      score += 8;
+      reasons.push(`${conditions.daysSinceRain} dry days — clean clear water, fish inshore`);
+    } else if (conditions.daysSinceRain >= 3) {
+      score += 4;
+      reasons.push("Water clearing after dry spell");
+    }
+  }
+  // "neutral" — no rain bonus/penalty applied here
+
+  // --- Visibility minimum check (up to ±15) ---
+  // Separate from clarity preference — this is a hard-floor check on whether
+  // you can physically see and shoot this species.
   if (conditions.estimatedVis < species.visMinimum) {
     const deficit = species.visMinimum - conditions.estimatedVis;
     score -= Math.min(15, deficit * 5);
@@ -257,14 +437,16 @@ export function calculateSpeciesLikelihood(
       `Vis ${conditions.estimatedVis}m is below minimum ${species.visMinimum}m for this species`
     );
   } else if (conditions.estimatedVis >= species.visMinimum * 2) {
-    score += 10;
+    score += 8;
     reasons.push("Excellent visibility — good conditions to spot them");
   } else {
-    score += 5;
+    score += 3;
     reasons.push("Visibility is adequate");
   }
 
-  // --- Current (up to ±15) ---
+  // --- Current strength (up to ±12) ---
+  // Pelagics follow bait through current; demersal fish are less affected.
+  // ~1 knot (moderate) is the sweet spot for Sydney kingfish and trevally.
   const currentMap: Record<string, number> = {
     none: 0,
     light: 1,
@@ -282,24 +464,74 @@ export function calculateSpeciesLikelihood(
   const prefVal = prefMap[species.currentPreference];
 
   if (prefVal === -1) {
-    // species doesn't care about current
-    score += 5;
-    reasons.push("Current strength doesn't matter for this species");
+    score += 3;
+    reasons.push("Current strength doesn't affect this species");
   } else {
     const currentDiff = Math.abs(currentVal - prefVal);
     if (currentDiff === 0) {
-      score += 15;
+      score += 12;
       reasons.push(
         `${conditions.currentStrength} current is exactly what this species likes`
       );
     } else if (currentDiff === 1) {
-      score += 5;
+      score += 4;
       reasons.push("Current is close to preferred strength");
     } else {
-      score -= 10;
+      score -= 8;
       reasons.push(
         `Prefers ${species.currentPreference} current, getting ${conditions.currentStrength}`
       );
+    }
+  }
+
+  // --- Wind direction (up to ±10) ---
+  // Offshore wind flattens the surface and pushes bait schools against reef
+  // structure, concentrating them where pelagic predators expect to find them.
+  // Onshore wind pushes turbid water onto the reef and disperses bait.
+  if (species.offshoreWindBonus) {
+    const isOffshore = OFFSHORE_DIRECTIONS.has(conditions.windDirection);
+    const isOnshore = ONSHORE_DIRECTIONS.has(conditions.windDirection);
+    if (isOffshore && conditions.windSpeed >= 5 && conditions.windSpeed <= 20) {
+      score += 10;
+      reasons.push(
+        `${conditions.windDirection} offshore at ${conditions.windSpeed}kt — bait pushed against structure`
+      );
+    } else if (isOffshore) {
+      score += 4;
+      reasons.push(`Offshore ${conditions.windDirection} — decent conditions`);
+    } else if (isOnshore && conditions.windSpeed >= 12) {
+      score -= 8;
+      reasons.push(
+        `${conditions.windDirection} onshore at ${conditions.windSpeed}kt — dispersing bait, dirty water`
+      );
+    } else if (isOnshore) {
+      score -= 3;
+      reasons.push(`Onshore ${conditions.windDirection} — not ideal for this species`);
+    }
+  }
+
+  // --- Swell & bait aggregation (up to ±10) ---
+  // E/SE swell is the Northern Beaches pelagic trigger: it pushes bait schools
+  // against headlands and drop-offs, holding them in place against the structure
+  // and triggering feeding runs. The same swell disturbs demersal habitat.
+  if (species.swellBaitEffect === "positive") {
+    const isBaitAggregating = BAIT_AGGREGATING_SWELL.has(conditions.swellDirection);
+    if (isBaitAggregating && conditions.swellHeight >= 0.5 && conditions.swellHeight <= 1.5) {
+      score += 10;
+      reasons.push(
+        `${conditions.swellDirection} swell at ${conditions.swellHeight}m — bait aggregating at headlands`
+      );
+    } else if (isBaitAggregating) {
+      score += 4;
+      reasons.push(`${conditions.swellDirection} swell pushing bait against structure`);
+    } else {
+      score -= 3;
+      reasons.push("Swell direction not pushing bait onto structure");
+    }
+  } else if (species.swellBaitEffect === "negative") {
+    if (conditions.swellHeight >= 1.0) {
+      score -= 5;
+      reasons.push(`${conditions.swellHeight}m swell disturbing reef habitat`);
     }
   }
 
@@ -309,24 +541,25 @@ export function calculateSpeciesLikelihood(
     reasons.push("Night — too dark to see or target any species");
   } else if (species.timeOfDay.includes(conditions.timeOfDay)) {
     score += 10;
-    reasons.push(`${conditions.timeOfDay} is a good time for this species`);
+    reasons.push(`${conditions.timeOfDay} is a prime feeding window for this species`);
   } else {
-    score -= 10;
+    score -= 8;
     reasons.push(
-      `${conditions.timeOfDay} is not ideal — prefer ${species.timeOfDay.join(", ")}`
+      `${conditions.timeOfDay} is not ideal — best at ${species.timeOfDay.join(", ")}`
     );
   }
 
-  // --- Structure match (up to ±10) ---
+  // --- Structure match (up to ±8) ---
   const structureOverlap = species.structure.filter((s) =>
     conditions.siteStructure.some(
-      (ss) => ss.toLowerCase().includes(s.toLowerCase()) ||
-              s.toLowerCase().includes(ss.toLowerCase())
+      (ss) =>
+        ss.toLowerCase().includes(s.toLowerCase()) ||
+        s.toLowerCase().includes(ss.toLowerCase())
     )
   );
 
   if (structureOverlap.length >= 2) {
-    score += 10;
+    score += 8;
     reasons.push(
       `Site structure matches well (${structureOverlap.join(", ")})`
     );
@@ -334,7 +567,7 @@ export function calculateSpeciesLikelihood(
     score += 3;
     reasons.push(`Some structure match (${structureOverlap[0]})`);
   } else {
-    score -= 10;
+    score -= 8;
     reasons.push("Site structure doesn't match this species' preferred habitat");
   }
 
@@ -348,7 +581,7 @@ export function calculateSpeciesLikelihood(
   } else {
     score -= 5;
     reasons.push(
-      `Depth ${conditions.depth}m is outside preferred ${species.depthRange.min}-${species.depthRange.max}m`
+      `Depth ${conditions.depth}m is outside preferred ${species.depthRange.min}–${species.depthRange.max}m`
     );
   }
 

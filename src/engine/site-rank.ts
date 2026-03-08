@@ -125,11 +125,18 @@ export function rankSites(
         const likelihood = calculateSpeciesLikelihood(sp, {
           month,
           waterTemp: input.weather.seaSurfaceTemp ?? 21,
+          seaSurfaceTemp: input.weather.seaSurfaceTemp ?? null,
           estimatedVis: visEstimate.metres,
           currentStrength,
           timeOfDay: input.timeOfDay,
           siteStructure: site.structure,
           depth: avgDepth,
+          windDirection: input.weather.observation.windDirection,
+          windSpeed: input.weather.observation.windSpeed,
+          swellHeight: input.swell.current.height,
+          swellDirection: input.swell.current.direction,
+          rainfall24h: input.weather.rainfall.last24h,
+          daysSinceRain: input.weather.rainfall.daysSinceSignificantRain,
         });
 
         const reg = getRegulation(sp.id);

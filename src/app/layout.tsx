@@ -63,7 +63,11 @@ export default function RootLayout({
         {/* Directional depth layers */}
         <div className="depth-highlight" aria-hidden="true" />
         <div className="depth-shadow" aria-hidden="true" />
-        <div className="grain-overlay" aria-hidden="true" />
+        {/* Caustic light patterns — ultra-low opacity underwater refraction */}
+        <div className="caustic-overlay" aria-hidden="true" />
+        <div className="caustic-overlay-2" aria-hidden="true" />
+        {/* Mobile vignette — edge darkening on small screens only */}
+        <div className="mobile-vignette" aria-hidden="true" />
         <div className="contour-overlay" aria-hidden="true">
           <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" viewBox="0 0 1440 900">
             <defs>
