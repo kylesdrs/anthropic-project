@@ -20,40 +20,40 @@ body {
 body::before {
   content: "";
   position: fixed;
-  inset: -160px;
+  inset: -200px;
   z-index: -4;
   background:
     /* Top-left highlight: subtle warm viridian light source */
-    radial-gradient(ellipse 80% 60% at 15% 10%, rgba(22, 90, 79, 0.12) 0%, transparent 65%),
+    radial-gradient(ellipse 85% 65% at 12% 8%, rgba(22, 90, 79, 0.14) 0%, transparent 65%),
     /* Mid-left flowing current */
-    radial-gradient(ellipse 90% 40% at 25% 45%, rgba(27, 102, 90, 0.08) 0%, transparent 60%),
+    radial-gradient(ellipse 90% 40% at 25% 45%, rgba(27, 102, 90, 0.07) 0%, transparent 60%),
     /* Center depth mass */
-    radial-gradient(ellipse 100% 50% at 50% 50%, rgba(11, 59, 54, 0.14) 0%, transparent 55%),
+    radial-gradient(ellipse 100% 50% at 50% 50%, rgba(11, 59, 54, 0.12) 0%, transparent 55%),
     /* Bottom-right shadow pool */
-    radial-gradient(ellipse 75% 65% at 80% 85%, rgba(14, 77, 69, 0.10) 0%, transparent 60%),
+    radial-gradient(ellipse 75% 65% at 82% 88%, rgba(7, 47, 44, 0.14) 0%, transparent 60%),
     /* Deep base wash */
-    radial-gradient(ellipse 120% 80% at 50% 60%, rgba(6, 38, 36, 0.20) 0%, transparent 70%);
-  filter: blur(130px);
-  animation: viridian-drift 45s ease-in-out infinite alternate;
+    radial-gradient(ellipse 120% 80% at 50% 60%, rgba(6, 38, 36, 0.18) 0%, transparent 70%);
+  filter: blur(140px);
+  animation: viridian-drift 50s cubic-bezier(0.4, 0, 0.6, 1) infinite alternate;
 }
 
 /* ── Secondary displacement layer: slower undertow ──────────── */
 body::after {
   content: "";
   position: fixed;
-  inset: -160px;
+  inset: -200px;
   z-index: -3;
   background:
     /* Upper-left soft caustic */
-    radial-gradient(ellipse 65% 50% at 20% 25%, rgba(22, 90, 79, 0.09) 0%, transparent 60%),
+    radial-gradient(ellipse 70% 55% at 18% 22%, rgba(22, 90, 79, 0.08) 0%, transparent 60%),
     /* Mid-depth horizontal current */
-    radial-gradient(ellipse 100% 35% at 55% 55%, rgba(11, 59, 54, 0.11) 0%, transparent 55%),
+    radial-gradient(ellipse 100% 35% at 55% 55%, rgba(11, 59, 54, 0.10) 0%, transparent 55%),
     /* Lower shadow mass */
-    radial-gradient(ellipse 70% 55% at 70% 75%, rgba(14, 77, 69, 0.08) 0%, transparent 60%),
+    radial-gradient(ellipse 70% 55% at 72% 78%, rgba(14, 77, 69, 0.07) 0%, transparent 60%),
     /* Deep bottom-right shadow */
-    radial-gradient(ellipse 60% 70% at 85% 90%, rgba(7, 47, 44, 0.13) 0%, transparent 55%);
-  filter: blur(150px);
-  animation: viridian-undertow 55s ease-in-out infinite alternate;
+    radial-gradient(ellipse 60% 70% at 88% 92%, rgba(4, 26, 25, 0.16) 0%, transparent 55%);
+  filter: blur(160px);
+  animation: viridian-undertow 60s cubic-bezier(0.4, 0, 0.6, 1) infinite alternate;
 }
 
 /* ── Highlight layer: top-left directional light ────────────── */
@@ -64,11 +64,11 @@ body::after {
   pointer-events: none;
   background:
     /* Primary top-left light wash */
-    radial-gradient(ellipse 60% 50% at 10% 5%, rgba(22, 90, 79, 0.07) 0%, transparent 70%),
-    /* Secondary highlight spill */
-    radial-gradient(ellipse 45% 40% at 30% 15%, rgba(27, 102, 90, 0.05) 0%, transparent 60%);
+    radial-gradient(ellipse 65% 55% at 8% 3%, rgba(22, 90, 79, 0.08) 0%, transparent 70%),
+    /* Secondary highlight spill across upper third */
+    radial-gradient(ellipse 50% 35% at 28% 12%, rgba(27, 102, 90, 0.04) 0%, transparent 60%);
   filter: blur(100px);
-  animation: highlight-breathe 40s ease-in-out infinite alternate;
+  animation: highlight-breathe 45s cubic-bezier(0.4, 0, 0.6, 1) infinite alternate;
 }
 
 /* ── Shadow layer: bottom-right depth falloff ───────────────── */
@@ -79,61 +79,77 @@ body::after {
   pointer-events: none;
   background:
     /* Bottom-right deep shadow */
-    radial-gradient(ellipse 65% 55% at 85% 90%, rgba(11, 59, 54, 0.12) 0%, transparent 65%),
+    radial-gradient(ellipse 70% 60% at 88% 92%, rgba(4, 26, 25, 0.18) 0%, transparent 65%),
     /* Lower-center shadow bed */
-    radial-gradient(ellipse 80% 40% at 60% 95%, rgba(14, 77, 69, 0.09) 0%, transparent 55%);
+    radial-gradient(ellipse 80% 40% at 60% 95%, rgba(7, 47, 44, 0.10) 0%, transparent 55%);
   filter: blur(120px);
-  animation: shadow-settle 50s ease-in-out infinite alternate;
+  animation: shadow-settle 55s cubic-bezier(0.4, 0, 0.6, 1) infinite alternate;
 }
+
+/* ── Keyframes: organic, continuous, 30-60s loops ────────────── */
 
 @keyframes viridian-drift {
   0% {
     transform: translate(0, 0) scale(1);
     opacity: 1;
   }
-  25% {
-    opacity: 0.90;
+  20% {
+    transform: translate(8px, 5px) scale(1.005);
+    opacity: 0.93;
   }
-  50% {
-    transform: translate(15px, 10px) scale(1.01);
-    opacity: 0.95;
+  45% {
+    transform: translate(18px, 12px) scale(1.012);
+    opacity: 0.96;
   }
-  75% {
-    opacity: 0.88;
+  70% {
+    transform: translate(6px, 20px) scale(1.008);
+    opacity: 0.91;
   }
   100% {
-    transform: translate(-10px, 18px) scale(1.02);
-    opacity: 1;
+    transform: translate(-12px, 15px) scale(1.018);
+    opacity: 0.97;
   }
 }
 
 @keyframes viridian-undertow {
   0% {
     transform: translate(0, 0) scale(1);
-    opacity: 0.85;
+    opacity: 0.88;
   }
-  33% {
-    transform: translate(-12px, 8px) scale(1.01);
+  25% {
+    transform: translate(-10px, 6px) scale(1.006);
+    opacity: 0.92;
+  }
+  50% {
+    transform: translate(-5px, 14px) scale(1.01);
+    opacity: 0.86;
+  }
+  75% {
+    transform: translate(10px, 4px) scale(1.004);
     opacity: 0.90;
   }
-  66% {
-    opacity: 0.82;
-  }
   100% {
-    transform: translate(8px, -10px) scale(1.015);
-    opacity: 0.88;
+    transform: translate(6px, -8px) scale(1.014);
+    opacity: 0.87;
   }
 }
 
 @keyframes highlight-breathe {
   0% {
     opacity: 1;
+    transform: translate(0, 0);
   }
-  50% {
-    opacity: 0.85;
+  35% {
+    opacity: 0.88;
+    transform: translate(4px, 3px);
+  }
+  65% {
+    opacity: 0.94;
+    transform: translate(-3px, 5px);
   }
   100% {
-    opacity: 0.95;
+    opacity: 0.90;
+    transform: translate(2px, -2px);
   }
 }
 
@@ -142,35 +158,116 @@ body::after {
     opacity: 1;
     transform: translate(0, 0);
   }
+  40% {
+    opacity: 0.92;
+    transform: translate(-4px, 3px);
+  }
   100% {
-    opacity: 0.90;
-    transform: translate(-5px, 5px);
+    opacity: 0.88;
+    transform: translate(-6px, 6px);
   }
 }
 
-/* ── Grain/noise overlay (fine tactile texture) ────────────── */
-.grain-overlay {
+/* ── Caustic light pattern: underwater light refraction ──────── */
+/* Ultra-low opacity, heavily blurred, slow organic drift */
+.caustic-overlay {
   position: fixed;
   inset: 0;
-  z-index: 0;
+  z-index: -1;
   pointer-events: none;
-  opacity: 0.03;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='5' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-repeat: repeat;
-  background-size: 200px 200px;
+  opacity: 0.06;
+  filter: blur(40px);
+  background:
+    /* Primary caustic — large soft organic blobs drifting right */
+    radial-gradient(ellipse 30% 25% at 20% 30%, rgba(22, 90, 79, 0.6) 0%, transparent 100%),
+    radial-gradient(ellipse 25% 35% at 45% 15%, rgba(27, 102, 90, 0.5) 0%, transparent 100%),
+    radial-gradient(ellipse 35% 20% at 70% 45%, rgba(14, 77, 69, 0.4) 0%, transparent 100%),
+    radial-gradient(ellipse 20% 30% at 35% 70%, rgba(22, 90, 79, 0.5) 0%, transparent 100%),
+    radial-gradient(ellipse 30% 25% at 80% 75%, rgba(11, 59, 54, 0.4) 0%, transparent 100%);
+  animation: caustic-drift 40s cubic-bezier(0.4, 0, 0.6, 1) infinite alternate;
+  /* Fade out at edges — directional from top-left */
+  mask-image: radial-gradient(ellipse 80% 75% at 35% 40%, black 0%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 75% at 35% 40%, black 0%, transparent 100%);
 }
 
-/* ── Oceanic displacement contour lines ────────────────────── */
-/* Flowing horizontal wave forms, not diagonal ridges */
+/* Secondary caustic layer — offset timing for organic feel */
+.caustic-overlay-2 {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.04;
+  filter: blur(55px);
+  background:
+    radial-gradient(ellipse 35% 30% at 55% 25%, rgba(22, 90, 79, 0.5) 0%, transparent 100%),
+    radial-gradient(ellipse 25% 20% at 25% 55%, rgba(14, 77, 69, 0.4) 0%, transparent 100%),
+    radial-gradient(ellipse 30% 35% at 75% 60%, rgba(27, 102, 90, 0.3) 0%, transparent 100%),
+    radial-gradient(ellipse 20% 25% at 50% 80%, rgba(11, 59, 54, 0.4) 0%, transparent 100%);
+  animation: caustic-drift-2 55s cubic-bezier(0.4, 0, 0.6, 1) infinite alternate;
+  mask-image: radial-gradient(ellipse 75% 70% at 40% 45%, black 0%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 75% 70% at 40% 45%, black 0%, transparent 100%);
+}
+
+@keyframes caustic-drift {
+  0% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+  30% {
+    transform: translate(25px, 15px) scale(1.03) rotate(0.5deg);
+  }
+  60% {
+    transform: translate(-10px, 30px) scale(1.01) rotate(-0.3deg);
+  }
+  100% {
+    transform: translate(15px, -10px) scale(1.04) rotate(0.2deg);
+  }
+}
+
+@keyframes caustic-drift-2 {
+  0% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+  35% {
+    transform: translate(-20px, 20px) scale(1.02) rotate(-0.4deg);
+  }
+  70% {
+    transform: translate(18px, 10px) scale(1.05) rotate(0.3deg);
+  }
+  100% {
+    transform: translate(-8px, -15px) scale(1.01) rotate(-0.2deg);
+  }
+}
+
+/* ── Contour overlay: flowing horizontal wave forms ──────────── */
 .contour-overlay {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.035;
-  filter: blur(0.8px);
-  mask-image: radial-gradient(ellipse 80% 75% at 45% 50%, transparent 25%, black 100%);
-  -webkit-mask-image: radial-gradient(ellipse 80% 75% at 45% 50%, transparent 25%, black 100%);
+  opacity: 0.03;
+  filter: blur(1px);
+  mask-image: radial-gradient(ellipse 80% 75% at 45% 50%, transparent 30%, black 100%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 75% at 45% 50%, transparent 30%, black 100%);
+}
+
+/* ── Mobile vignette: soft edge darkening for focus ──────────── */
+.mobile-vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .mobile-vignette {
+    display: block;
+    background: radial-gradient(
+      ellipse 70% 65% at 50% 50%,
+      transparent 40%,
+      rgba(4, 26, 25, 0.35) 100%
+    );
+  }
 }
 
 /* ── Sonar sweep animation for score badge ─────────────────── */
@@ -413,17 +510,25 @@ html {
   scroll-behavior: smooth;
 }
 
-/* ── Mobile performance: disable heavy blur animations ──────── */
+/* ── Mobile: lighter animations, add vignette ────────────────── */
 @media (max-width: 640px) {
   body::before,
   body::after {
-    animation: none !important;
-    filter: blur(60px);
+    filter: blur(80px);
+    animation-duration: 60s;
   }
   .depth-highlight,
   .depth-shadow {
-    animation: none !important;
+    filter: blur(60px);
+    animation-duration: 50s;
+  }
+  .caustic-overlay {
+    opacity: 0.04;
     filter: blur(50px);
+    animation-duration: 50s;
+  }
+  .caustic-overlay-2 {
+    display: none;
   }
   .contour-overlay {
     display: none;
@@ -436,6 +541,8 @@ html {
   body::after,
   .depth-highlight,
   .depth-shadow,
+  .caustic-overlay,
+  .caustic-overlay-2,
   .sonar-wrapper::before,
   .sonar-wrapper::after,
   .map-dot {
