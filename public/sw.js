@@ -1,4 +1,4 @@
-const CACHE_NAME = "spearo-v2";
+const CACHE_NAME = "spearo-v3";
 
 // App shell files to cache for offline use
 const APP_SHELL = [
