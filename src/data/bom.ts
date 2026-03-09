@@ -37,7 +37,7 @@ export interface TidePoint {
 
 export interface TideData {
   predictions: TidePoint[];
-  currentState: "rising" | "falling" | "high_slack" | "low_slack";
+  currentState: "low_slack" | "early_rising" | "mid_rising" | "high_slack" | "early_falling" | "mid_falling";
   nextHigh: TidePoint | null;
   nextLow: TidePoint | null;
 }
@@ -249,20 +249,28 @@ export function estimateTideState(
     }
   }
 
-  let currentState: TideData["currentState"] = "rising";
+  let currentState: TideData["currentState"] = "mid_rising";
   if (prevPoint && nextPoint) {
     const prevMs = new Date(prevPoint.time).getTime();
     const nextMs = new Date(nextPoint.time).getTime();
     const progress = (nowMs - prevMs) / (nextMs - prevMs);
 
     if (prevPoint.type === "low" && nextPoint.type === "high") {
-      currentState = progress > 0.9 ? "high_slack" : "rising";
+      // Rising: low_slack → early_rising → mid_rising → high_slack
+      if (progress < 0.08) currentState = "low_slack";
+      else if (progress < 0.4) currentState = "early_rising";
+      else if (progress < 0.9) currentState = "mid_rising";
+      else currentState = "high_slack";
     } else if (prevPoint.type === "high" && nextPoint.type === "low") {
-      currentState = progress > 0.9 ? "low_slack" : "falling";
+      // Falling: high_slack → early_falling → mid_falling → low_slack
+      if (progress < 0.08) currentState = "high_slack";
+      else if (progress < 0.4) currentState = "early_falling";
+      else if (progress < 0.9) currentState = "mid_falling";
+      else currentState = "low_slack";
     }
   } else if (prevPoint) {
     // After the last prediction — estimate from previous point
-    currentState = prevPoint.type === "high" ? "falling" : "rising";
+    currentState = prevPoint.type === "high" ? "early_falling" : "early_rising";
   }
 
   return { currentState, nextHigh, nextLow };

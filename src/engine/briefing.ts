@@ -385,6 +385,7 @@ function generateRecommendation(
         rating: bestSite.visibility.rating as VisibilityEstimate["rating"],
         confidence: bestSite.visibility.confidence as VisibilityEstimate["confidence"],
         factors: bestSite.visibility.factors,
+        explanation: bestSite.visibility.explanation,
       }
     : visibility;
 
@@ -488,7 +489,7 @@ function suggestBestTime(
   // Rising tide is generally better
   const tideState = weather.tides.currentState;
 
-  if (tideState === "rising") {
+  if (tideState === "early_rising" || tideState === "mid_rising") {
     return "Now is good — rising tide bringing clean water in";
   }
 
@@ -544,7 +545,7 @@ function collectKeyFactors(
   );
 
   // Tide
-  factors.push(`Tide: ${weather.tides.currentState}`);
+  factors.push(`Tide: ${weather.tides.currentState.replace(/_/g, " ")}`);
 
   // Rain
   if (weather.rainfall.last24h >= 5) {

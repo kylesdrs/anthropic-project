@@ -60,7 +60,7 @@ function generateTidePredictions() {
   const nextHigh = points.find((p) => p.type === "high" && new Date(p.time).getTime() > nowMs) ?? null;
   const nextLow = points.find((p) => p.type === "low" && new Date(p.time).getTime() > nowMs) ?? null;
 
-  return { predictions: points, currentState: "rising", nextHigh, nextLow };
+  return { predictions: points, currentState: "mid_rising" as const, nextHigh, nextLow };
 }
 
 export function generateMockBriefing() {

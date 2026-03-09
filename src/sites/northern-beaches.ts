@@ -27,6 +27,23 @@ export interface DiveSite {
   entryPoints: { lat: number; lng: number; description: string }[];
   hazards: string[];
   notes: string;
+  /** Site-specific visibility baseline in metres (median vis on a neutral day). */
+  baselineVis: number;
+  /**
+   * Monthly seasonal curve: multiplier applied to baselineVis for each month (1=Jan..12=Dec).
+   * 1.0 = average, >1 = better than average, <1 = worse.
+   */
+  seasonalCurve: [number, number, number, number, number, number, number, number, number, number, number, number];
+  /**
+   * Runoff sensitivity: how much rain-driven turbidity hits this site.
+   * 1.0 = normal, >1 = near creek/lagoon outflow, <1 = deep/offshore.
+   */
+  runoffSensitivity: number;
+  /**
+   * Wind sensitivity: how much onshore wind affects vis at this site.
+   * Shallower sites are more affected. Based on average depth.
+   */
+  windSensitivity: number;
 }
 
 export const northernBeachesSites: DiveSite[] = [
@@ -78,6 +95,11 @@ export const northernBeachesSites: DiveSite[] = [
     ],
     notes:
       "Just outside the Cabbage Tree Bay reserve boundary, so the fish spillover from the protected zone is real — good numbers of kingfish, trevally, and bonito move through here. The drop-offs east of the point hold fish when current is running. Proximity to the reserve means fish are less pressured than at other open spots. Be absolutely certain you're outside the reserve boundary before taking any shots.",
+    baselineVis: 4,
+    // Jan-Dec: summer EAC helps, autumn best, spring worst (plankton)
+    seasonalCurve: [1.1, 1.1, 1.05, 1.15, 1.2, 1.0, 0.95, 0.9, 0.85, 0.85, 0.9, 1.05],
+    runoffSensitivity: 0.8, // moderate — no direct lagoon, some harbour influence
+    windSensitivity: 1.0, // moderate depth, average wind sensitivity
   },
   {
     id: "freshwater-headland",
@@ -117,6 +139,10 @@ export const northernBeachesSites: DiveSite[] = [
     ],
     notes:
       "Good all-rounder when swell is small. Kingfish and bonito show up when current is running along the headland. Sits right on the edge of the Cabbage Tree Bay reserve — stay on the Queenscliff side.",
+    baselineVis: 4.5,
+    seasonalCurve: [1.1, 1.1, 1.05, 1.15, 1.2, 1.0, 0.95, 0.9, 0.85, 0.85, 0.9, 1.05],
+    runoffSensitivity: 0.7, // relatively sheltered from major outflows
+    windSensitivity: 0.9, // moderate depth, slightly protected headland
   },
   {
     id: "long-reef",
@@ -164,6 +190,10 @@ export const northernBeachesSites: DiveSite[] = [
     ],
     notes:
       "One of Sydney's most productive spearfishing spots when conditions align. The northern and southern drop-offs hold kingfish when current is pushing. Needs high tide to access the platform comfortably. Very exposed — don't go if swell is building. Site of fatal shark attack in September 2025.",
+    baselineVis: 3.5,
+    seasonalCurve: [1.05, 1.05, 1.0, 1.15, 1.2, 1.0, 0.95, 0.9, 0.8, 0.8, 0.9, 1.0],
+    runoffSensitivity: 1.0, // shallow platform, picks up general coastal runoff
+    windSensitivity: 1.3, // very shallow platform — highly wind-affected
   },
   {
     id: "narrabeen-head",
@@ -204,6 +234,10 @@ export const northernBeachesSites: DiveSite[] = [
     ],
     notes:
       "Underrated spot that fishes well when the south-facing sites are blown out by northerly swell. Good snapper country in the ledges, especially in the cooler months. The drop-offs on the northern side hold kingfish when current is running south.",
+    baselineVis: 3.5,
+    seasonalCurve: [1.0, 1.0, 1.0, 1.1, 1.15, 0.95, 0.9, 0.85, 0.8, 0.85, 0.9, 1.0],
+    runoffSensitivity: 1.4, // Narrabeen Lagoon outflow — heavy rain impact
+    windSensitivity: 0.9, // moderate depth, some headland shelter
   },
   {
     id: "north-head",
@@ -247,6 +281,10 @@ export const northernBeachesSites: DiveSite[] = [
     ],
     notes:
       "Advanced site with serious big-fish potential. The walls drop into deep blue water and attract large pelagics including cobia and kingfish. Only diveable on very calm days — exposed to nearly everything. Strong currents are common. Not a site for beginners. Check conditions thoroughly before committing.",
+    baselineVis: 6,
+    seasonalCurve: [1.15, 1.15, 1.1, 1.2, 1.25, 1.05, 1.0, 0.95, 0.85, 0.85, 0.95, 1.1],
+    runoffSensitivity: 0.4, // deep, offshore-facing — least affected by runoff
+    windSensitivity: 0.5, // deep water — wind barely affects vis at depth
   },
   {
     id: "curl-curl-headland",
@@ -281,6 +319,10 @@ export const northernBeachesSites: DiveSite[] = [
     ],
     notes:
       "Good beginner-to-intermediate spot with accessible depths. The gutters hold trevally and snapper, and the sandy patches adjacent to reef are productive for flathead. Less crowded than Long Reef or Freshwater.",
+    baselineVis: 3.5,
+    seasonalCurve: [1.05, 1.05, 1.0, 1.1, 1.15, 0.95, 0.9, 0.85, 0.8, 0.85, 0.9, 1.0],
+    runoffSensitivity: 0.9, // no major lagoon nearby, some general coastal runoff
+    windSensitivity: 1.2, // shallow site — wind-affected
   },
   {
     id: "dee-why-head",
@@ -325,5 +367,9 @@ export const northernBeachesSites: DiveSite[] = [
     ],
     notes:
       "Solid mid-range spot between Long Reef and Curl Curl. The reef ledges on the northern side are good snapper habitat, especially in cooler months. The sand/reef interface produces flathead year-round. Vis is more affected by rain than some other spots due to the Dee Why Lagoon outflow nearby.",
+    baselineVis: 3,
+    seasonalCurve: [1.0, 1.0, 0.95, 1.1, 1.15, 0.95, 0.9, 0.85, 0.8, 0.8, 0.9, 0.95],
+    runoffSensitivity: 1.5, // Dee Why Lagoon — highest runoff impact of all sites
+    windSensitivity: 1.1, // moderate depth but exposed to NE wind
   },
 ];

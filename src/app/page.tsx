@@ -82,6 +82,7 @@ interface DiveBriefing {
     rating: string;
     confidence: string;
     factors: { name: string; impact: number; description: string }[];
+    explanation: string;
   } | null;
   siteRankings: SiteRanking[];
   recommendation: {
@@ -99,6 +100,7 @@ interface SiteVisibility {
   rating: string;
   confidence: string;
   factors: { name: string; impact: number; description: string }[];
+  explanation: string;
 }
 
 interface SiteRanking {

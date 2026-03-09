@@ -30,6 +30,7 @@ export interface SiteVisibility {
   rating: string;
   confidence: string;
   factors: { name: string; impact: number; description: string }[];
+  explanation: string;
 }
 
 export interface SiteSharkRisk {
@@ -208,6 +209,7 @@ export function rankSites(
         rating: visEstimate.rating,
         confidence: visEstimate.confidence,
         factors: visEstimate.factors,
+        explanation: visEstimate.explanation,
       },
       sharkRisk: sharkRisk
         ? {
@@ -252,13 +254,13 @@ function assessConditionsFit(
     input.weather.observation.windDirection
   );
 
+  const tideState = input.weather.tides.currentState;
+  const isRising = tideState === "early_rising" || tideState === "mid_rising";
+  const isHighOrRising = isRising || tideState === "high_slack";
   const tideGood =
     site.bestConditions.tidePreference === "any" ||
-    (site.bestConditions.tidePreference === "rising" &&
-      input.weather.tides.currentState === "rising") ||
-    (site.bestConditions.tidePreference === "high" &&
-      (input.weather.tides.currentState === "high_slack" ||
-        input.weather.tides.currentState === "rising"));
+    (site.bestConditions.tidePreference === "rising" && isRising) ||
+    (site.bestConditions.tidePreference === "high" && isHighOrRising);
 
   // Overall fit
   const fitScore =
@@ -283,7 +285,7 @@ function generateScoreExplanation(
   input: RankingInput,
   diveScore: DiveScore,
   fit: ConditionsFit,
-  vis: { metres: number; rating: string; factors?: { name: string; impact: number; description: string }[] },
+  vis: { metres: number; rating: string; factors?: { name: string; impact: number; description: string }[]; explanation?: string },
   topSpecies: SiteSpecies[],
   sharkRisk: { level: string; score: number } | null
 ): string {
@@ -349,16 +351,9 @@ function generateScoreExplanation(
     );
   }
 
-  // Visibility — include swell direction context
-  const visDirFactor = vis.factors?.find((f: { name: string }) => f.name === "Swell Direction");
-  if (visDirFactor && visDirFactor.impact > 0) {
-    parts.push(
-      `Visibility is estimated at ${vis.metres}m (${vis.rating}) — helped by the ${swell.direction} swell direction, which this site is sheltered from.`
-    );
-  } else if (visDirFactor && visDirFactor.impact < 0) {
-    parts.push(
-      `Visibility is estimated at ${vis.metres}m (${vis.rating}) — the ${swell.direction} swell is hitting this site directly, stirring up the bottom.`
-    );
+  // Visibility — use the per-site explanation if available
+  if (vis.explanation) {
+    parts.push(vis.explanation);
   } else {
     parts.push(
       `Visibility is estimated at ${vis.metres}m (${vis.rating}).`
@@ -366,14 +361,15 @@ function generateScoreExplanation(
   }
 
   // Tide
-  const tideState = tide.currentState.replace("_", " ");
+  const tideStateStr = tide.currentState.replace(/_/g, " ");
+  const tideIsRising = tide.currentState === "early_rising" || tide.currentState === "mid_rising";
   if (fit.tideGood) {
     parts.push(
-      `The ${tideState} tide works well here${tide.currentState === "rising" ? " — clean ocean water is pushing inshore over the reef" : ""}.`
+      `The ${tideStateStr} tide works well here${tideIsRising ? " — clean ocean water is pushing inshore over the reef" : ""}.`
     );
   } else {
     parts.push(
-      `The ${tideState} tide isn't the best for this spot — ${site.bestConditions.tidePreference === "rising" ? "a rising tide would bring cleaner water in" : "higher tide would be better for access"}.`
+      `The ${tideStateStr} tide isn't the best for this spot — ${site.bestConditions.tidePreference === "rising" ? "a rising tide would bring cleaner water in" : "higher tide would be better for access"}.`
     );
   }
 
