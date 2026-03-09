@@ -556,14 +556,5 @@ function collectKeyFactors(
     );
   }
 
-  // Top species at best site
-  if (bestSite && bestSite.topSpecies.length > 0) {
-    const top = bestSite.topSpecies
-      .slice(0, 2)
-      .map((s) => `${s.name} (${s.likelihood.score}%)`)
-      .join(", ");
-    factors.push(`Best chances: ${top}`);
-  }
-
   return factors;
 }

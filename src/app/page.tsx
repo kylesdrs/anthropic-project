@@ -111,7 +111,7 @@ interface SiteRanking {
     label: string;
     breakdown: {
       visibility: number;
-      fishActivity: number;
+      conditionsFit: number;
       safety: number;
       comfort: number;
     };
@@ -128,8 +128,9 @@ interface SiteRanking {
   visibility?: SiteVisibility;
   topSpecies: {
     name: string;
-    likelihood: { score: number; reasoning: string };
     regulation: string;
+    seasonRange: string;
+    inTempRange: boolean;
   }[];
   warnings: string[];
   explanation?: string;
@@ -181,11 +182,23 @@ function sonarColor(score: number): string {
   return "sonar-red";
 }
 
-function likelihoodColor(score: number): string {
-  if (score >= 70) return "bg-emerald-500/15 text-emerald-400";
-  if (score >= 50) return "bg-teal-500/15 text-teal-400";
-  if (score >= 30) return "bg-yellow-500/15 text-yellow-400";
-  return "bg-ocean-800/50 text-ocean-400";
+function conditionsGuidance(visMetres: number): { text: string; color: string } {
+  if (visMetres >= 8) return {
+    text: "Pelagics active — good vis for spotting kingfish, bonito, trevally",
+    color: "text-emerald-400",
+  };
+  if (visMetres >= 4) return {
+    text: "Mixed — reef fish comfortable, pelagics possible near structure",
+    color: "text-teal-400",
+  };
+  if (visMetres >= 2) return {
+    text: "Bottom dwellers and ambush feeders — flathead, snapper in gutters",
+    color: "text-yellow-400",
+  };
+  return {
+    text: "Low vis limits all species — mulloway are the exception, they hunt in dirty water",
+    color: "text-orange-400",
+  };
 }
 
 function formatTime(iso: string): string {
@@ -736,10 +749,10 @@ function SiteCard({
             <div className="grid grid-cols-4 gap-2 text-center">
               {(
                 [
-                  ["Vis", diveScore.breakdown.visibility, "30%"],
-                  ["Fish", diveScore.breakdown.fishActivity, "30%"],
+                  ["Vis", diveScore.breakdown.visibility, "40%"],
+                  ["Fit", diveScore.breakdown.conditionsFit, "25%"],
                   ["Safety", diveScore.breakdown.safety, "25%"],
-                  ["Comfort", diveScore.breakdown.comfort, "15%"],
+                  ["Comfort", diveScore.breakdown.comfort, "10%"],
                 ] as [string, number, string][]
               ).map(([label, val, weight]) => (
                 <div key={label} className="rounded-xl bg-ocean-950/50 border border-white/[0.03] p-2.5">
@@ -751,10 +764,10 @@ function SiteCard({
             </div>
           </div>
 
-          {/* Top species */}
+          {/* Species & regulations */}
           {topSpecies.length > 0 && (
             <div>
-              <p className="text-[10px] font-semibold text-ocean-400 uppercase tracking-wider mb-2">Species Forecast</p>
+              <p className="text-[10px] font-semibold text-ocean-400 uppercase tracking-wider mb-2">Species & Bag Limits</p>
               <div className="space-y-1">
                 {topSpecies.map((sp) => (
                   <div
@@ -765,11 +778,12 @@ function SiteCard({
                       <span className="text-xs text-ocean-200 font-medium">{sp.name}</span>
                       <p className="text-[10px] text-ocean-500">{sp.regulation}</p>
                     </div>
-                    <span
-                      className={`text-xs font-bold px-2.5 py-1 rounded-full ${likelihoodColor(sp.likelihood.score)}`}
-                    >
-                      {sp.likelihood.score}%
-                    </span>
+                    <div className="text-right">
+                      <span className="text-[10px] text-ocean-400">{sp.seasonRange}</span>
+                      <p className={`text-[10px] ${sp.inTempRange ? "text-emerald-400" : "text-ocean-500"}`}>
+                        {sp.inTempRange ? "In temp range" : "Outside temp range"}
+                      </p>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1431,32 +1445,46 @@ export default function Dashboard() {
         )}
       </section>
 
-      {/* Species Forecast */}
+      {/* Species Guide */}
       {siteRankings.length > 0 && (
         <section>
           <SectionHeader
-            title="Species Forecast"
-            subtitle={`Likelihood at ${siteRankings[0]?.site.name ?? "best site"}`}
+            title="Species Guide"
+            subtitle="What's around and what to expect"
           />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 stagger-children">
-            {(siteRankings[0]?.topSpecies ?? []).map((sp) => (
-              <div
-                key={sp.name}
-                className="glass-card p-4 flex items-center justify-between group"
-              >
-                <div>
-                  <span className="text-sm text-white font-medium">{sp.name}</span>
-                  <p className="text-[10px] text-ocean-500 mt-0.5">
-                    {sp.regulation}
-                  </p>
-                </div>
-                <span
-                  className={`text-sm font-bold px-3 py-1.5 rounded-full ${likelihoodColor(sp.likelihood.score)}`}
+
+          {/* Conditions guidance based on vis */}
+          {visibility && (
+            <div className="glass-card p-4 mb-4">
+              <p className="text-[10px] font-semibold text-ocean-400 uppercase tracking-wider mb-2">Conditions Today Favour</p>
+              <p className={`text-sm font-medium ${conditionsGuidance(visibility.metres).color}`}>
+                {conditionsGuidance(visibility.metres).text}
+              </p>
+            </div>
+          )}
+
+          {/* Seasonal species list */}
+          <div className="glass-card p-4">
+            <p className="text-[10px] font-semibold text-ocean-400 uppercase tracking-wider mb-3">What&apos;s Around This Time of Year</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {(siteRankings[0]?.topSpecies ?? []).map((sp) => (
+                <div
+                  key={sp.name}
+                  className="flex items-center justify-between py-2 px-3 rounded-lg bg-ocean-950/40 border border-white/[0.03]"
                 >
-                  {sp.likelihood.score}%
-                </span>
-              </div>
-            ))}
+                  <div>
+                    <span className="text-xs text-ocean-200 font-medium">{sp.name}</span>
+                    <p className="text-[10px] text-ocean-500">{sp.regulation}</p>
+                  </div>
+                  <div className="text-right flex-shrink-0 ml-2">
+                    <span className="text-[10px] text-ocean-400 block">{sp.seasonRange}</span>
+                    <span className={`text-[10px] ${sp.inTempRange ? "text-emerald-400" : "text-ocean-500"}`}>
+                      {sp.inTempRange ? "Water temp OK" : "Outside temp range"}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
       )}

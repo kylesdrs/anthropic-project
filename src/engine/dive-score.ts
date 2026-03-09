@@ -1,20 +1,19 @@
 /**
  * Overall dive score calculator.
  *
- * Produces a 1-10 score combining visibility, fish activity,
+ * Produces a 1-10 score combining visibility, conditions fit,
  * safety, and comfort modifiers.
  *
  * Score breakdown:
- * - Visibility:     30% — can you see fish?
- * - Fish activity:  30% — are fish likely?
- * - Safety:         25% — shark risk, swell, conditions
- * - Comfort:        15% — wind, temp, entry difficulty
+ * - Visibility:      40% — can you see fish?
+ * - Conditions fit:  25% — swell/wind/tide alignment with site
+ * - Safety:          25% — shark risk, swell, conditions
+ * - Comfort:         10% — wind, temp, entry difficulty
  */
 
 import type { VisibilityEstimate } from "./visibility";
 import { parseCloudCover } from "./visibility";
 import type { SharkRiskAssessment } from "./shark-risk";
-import type { SpeciesLikelihood } from "./species";
 import type { SwellReading } from "../data/swell";
 import type { DiveSite } from "../sites/northern-beaches";
 
@@ -23,7 +22,6 @@ import type { DiveSite } from "../sites/northern-beaches";
 export interface DiveScoreInput {
   visibility: VisibilityEstimate;
   sharkRisk: SharkRiskAssessment | null;
-  speciesScores: { speciesName: string; likelihood: SpeciesLikelihood }[];
   swell: SwellReading;
   windSpeed: number; // knots (sustained)
   windGust: number; // knots (gusts)
@@ -33,6 +31,7 @@ export interface DiveScoreInput {
   site: DiveSite;
   timeOfDay: "night" | "dawn" | "morning" | "midday" | "afternoon" | "dusk";
   cloud?: string; // BOM cloud description e.g. "Overcast", "Partly cloudy"
+  tideState?: string; // e.g. "early_rising", "high_slack"
 }
 
 export interface DiveScore {
@@ -40,7 +39,7 @@ export interface DiveScore {
   label: string; // "Epic", "Great", "Good", "Fair", "Marginal", "Poor", "Skip It"
   breakdown: {
     visibility: number; // 1-10
-    fishActivity: number; // 1-10
+    conditionsFit: number; // 1-10
     safety: number; // 1-10
     comfort: number; // 1-10
   };
@@ -61,7 +60,7 @@ export function calculateDiveScore(input: DiveScoreInput): DiveScore {
       label: "Skip It",
       breakdown: {
         visibility: 1,
-        fishActivity: 1,
+        conditionsFit: 1,
         safety: 1,
         comfort: 1,
       },
@@ -71,7 +70,7 @@ export function calculateDiveScore(input: DiveScoreInput): DiveScore {
   }
 
   const visScore = scoreVisibility(input.visibility);
-  const fishScore = scoreFishActivity(input.speciesScores);
+  const fitScore = scoreConditionsFit(input.swell, input.windSpeed, input.windDirection, input.site, input.tideState);
   const safetyScore = scoreSafety(input.sharkRisk, input.swell, input.site, input.windGust);
   const comfortScore = scoreComfort(
     input.windSpeed,
@@ -84,10 +83,10 @@ export function calculateDiveScore(input: DiveScoreInput): DiveScore {
 
   // Weighted average
   let overall =
-    visScore * 0.3 +
-    fishScore * 0.3 +
+    visScore * 0.4 +
+    fitScore * 0.25 +
     safetyScore * 0.25 +
-    comfortScore * 0.15;
+    comfortScore * 0.1;
 
   // Sunlight penalty — dawn and dusk have reduced light
   if (input.timeOfDay === "dusk") {
@@ -129,7 +128,7 @@ export function calculateDiveScore(input: DiveScoreInput): DiveScore {
     label,
     breakdown: {
       visibility: Math.round(visScore * 10) / 10,
-      fishActivity: Math.round(fishScore * 10) / 10,
+      conditionsFit: Math.round(fitScore * 10) / 10,
       safety: Math.round(safetyScore * 10) / 10,
       comfort: Math.round(comfortScore * 10) / 10,
     },
@@ -158,21 +157,56 @@ function scoreVisibility(vis: VisibilityEstimate): number {
   return 1;
 }
 
-function scoreFishActivity(
-  speciesScores: DiveScoreInput["speciesScores"]
+const OFFSHORE_DIRS = new Set(["W", "WSW", "SW", "WNW", "NW", "NNW"]);
+
+function scoreConditionsFit(
+  swell: SwellReading,
+  windSpeed: number,
+  windDirection: string,
+  site: DiveSite,
+  tideState?: string,
 ): number {
-  if (speciesScores.length === 0) return 5; // neutral
+  let score = 5; // neutral start
 
-  // Take the top 3 species scores and average
-  const sorted = [...speciesScores].sort(
-    (a, b) => b.likelihood.score - a.likelihood.score
-  );
-  const top3 = sorted.slice(0, 3);
-  const avgScore =
-    top3.reduce((sum, s) => sum + s.likelihood.score, 0) / top3.length;
+  // Swell within site limits
+  const swellRatio = swell.height / site.bestConditions.swellMax;
+  if (swellRatio <= 0.5) score += 2;       // well under
+  else if (swellRatio <= 0.8) score += 1;  // comfortably under
+  else if (swellRatio <= 1.0) score += 0;  // at limit
+  else if (swellRatio <= 1.3) score -= 1.5;
+  else score -= 3;
 
-  // Map 0-100 species score to 1-10 dive score
-  return Math.max(1, Math.min(10, avgScore / 10));
+  // Swell direction protected
+  if (site.bestConditions.swellDirectionProtected.includes(swell.direction)) {
+    score += 1.5;
+  }
+
+  // Wind direction
+  if (site.bestConditions.windDirectionIdeal.includes(windDirection)) {
+    score += 1.5;
+  } else if (OFFSHORE_DIRS.has(windDirection)) {
+    score += 0.5; // offshore but not ideal for this specific site
+  } else if (windSpeed >= 12) {
+    score -= 1; // onshore and strong
+  }
+
+  // Wind speed
+  if (windSpeed < 8) score += 0.5;
+  else if (windSpeed >= 20) score -= 1.5;
+
+  // Tide preference match
+  if (tideState) {
+    const isRising = tideState === "early_rising" || tideState === "mid_rising";
+    const isHighOrRising = isRising || tideState === "high_slack";
+    const tideGood =
+      site.bestConditions.tidePreference === "any" ||
+      (site.bestConditions.tidePreference === "rising" && isRising) ||
+      (site.bestConditions.tidePreference === "high" && isHighOrRising);
+    if (tideGood) score += 1;
+    else score -= 0.5;
+  }
+
+  return Math.max(1, Math.min(10, score));
 }
 
 function scoreSafety(
@@ -315,18 +349,6 @@ function collectReasons(input: DiveScoreInput): string[] {
     reasons.push(`Excellent vis (${input.visibility.metres}m)`);
   } else if (input.visibility.metres >= 8) {
     reasons.push(`Good vis (${input.visibility.metres}m)`);
-  }
-
-  // Top species
-  const topSpecies = [...input.speciesScores]
-    .sort((a, b) => b.likelihood.score - a.likelihood.score)
-    .slice(0, 2)
-    .filter((s) => s.likelihood.score >= 60);
-
-  if (topSpecies.length > 0) {
-    reasons.push(
-      `Good chances: ${topSpecies.map((s) => s.speciesName).join(", ")}`
-    );
   }
 
   // Wind

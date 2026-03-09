@@ -15,11 +15,7 @@ import type { SharkActivitySummary } from "../data/sharksmart";
 import { nearbyDrumlines } from "../data/sharksmart";
 import { estimateVisibility, estimateCurrentStrength, parseCloudCover } from "./visibility";
 import { assessSharkRisk } from "./shark-risk";
-import {
-  calculateSpeciesLikelihood,
-  targetSpecies,
-  type SpeciesLikelihood,
-} from "./species";
+import { targetSpecies } from "./species";
 import { calculateDiveScore, type DiveScore } from "./dive-score";
 import { getRegulation } from "../data/fisheries";
 
@@ -61,8 +57,9 @@ export interface ConditionsFit {
 
 export interface SiteSpecies {
   name: string;
-  likelihood: SpeciesLikelihood;
   regulation: string;
+  seasonRange: string;
+  inTempRange: boolean;
 }
 
 export interface RankingInput {
@@ -111,11 +108,10 @@ export function rankSites(
       input.weather.tides.currentState
     );
 
-    // 4. Species likelihood
-    const avgDepth =
-      (site.depthRange.min + site.depthRange.max) / 2;
+    // 4. Species present at this site (seasonal reference only — no likelihood scores)
+    const waterTemp = input.weather.seaSurfaceTemp ?? 21;
 
-    const topSpecies = targetSpecies
+    const siteSpecies: SiteSpecies[] = targetSpecies
       .filter((sp) =>
         site.targetSpecies.some(
           (ts) =>
@@ -123,35 +119,22 @@ export function rankSites(
         )
       )
       .map((sp) => {
-        const likelihood = calculateSpeciesLikelihood(sp, {
-          month,
-          waterTemp: input.weather.seaSurfaceTemp ?? 21,
-          seaSurfaceTemp: input.weather.seaSurfaceTemp ?? null,
-          estimatedVis: visEstimate.metres,
-          currentStrength,
-          timeOfDay: input.timeOfDay,
-          siteStructure: site.structure,
-          depth: avgDepth,
-          windDirection: input.weather.observation.windDirection,
-          windSpeed: input.weather.observation.windSpeed,
-          swellHeight: input.swell.current.height,
-          swellDirection: input.swell.current.direction,
-          rainfall24h: input.weather.rainfall.last24h,
-          daysSinceRain: input.weather.rainfall.daysSinceSignificantRain,
-        });
-
         const reg = getRegulation(sp.id);
         const regulation = reg
           ? `${reg.minSizeCm > 0 ? `${reg.minSizeCm}cm min` : "No min size"}${reg.maxSizeCm ? `, ${reg.maxSizeCm}cm max` : ""}, bag ${reg.bagLimit}`
           : "";
 
-        return {
-          name: sp.commonName,
-          likelihood,
-          regulation,
-        };
-      })
-      .sort((a, b) => b.likelihood.score - a.likelihood.score);
+        // Build human-readable season range
+        const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        const peakMonths = sp.season.peak;
+        const seasonRange = peakMonths.length > 0
+          ? `${monthNames[peakMonths[0] - 1]}–${monthNames[peakMonths[peakMonths.length - 1] - 1]}`
+          : "Year-round";
+
+        const inTempRange = waterTemp >= sp.tempRange.min && waterTemp <= sp.tempRange.max;
+
+        return { name: sp.commonName, regulation, seasonRange, inTempRange };
+      });
 
     // 5. Shark risk (only when real data is available)
     let sharkRisk: ReturnType<typeof assessSharkRisk> | null = null;
@@ -176,10 +159,6 @@ export function rankSites(
     const diveScore = calculateDiveScore({
       visibility: visEstimate,
       sharkRisk,
-      speciesScores: topSpecies.map((s) => ({
-        speciesName: s.name,
-        likelihood: s.likelihood,
-      })),
       swell: input.swell.current,
       windSpeed: input.weather.observation.windSpeed,
       windGust: input.weather.observation.windGust,
@@ -189,6 +168,7 @@ export function rankSites(
       site,
       timeOfDay: input.timeOfDay,
       cloud: input.weather.observation.cloud,
+      tideState: input.weather.tides.currentState,
     });
 
     // 7. Warnings
@@ -196,7 +176,7 @@ export function rankSites(
 
     // 8. Build explanation paragraph
     const explanation = generateScoreExplanation(
-      site, input, diveScore, conditionsFit, visEstimate, topSpecies, sharkRisk
+      site, input, diveScore, conditionsFit, visEstimate, sharkRisk
     );
 
     return {
@@ -218,7 +198,7 @@ export function rankSites(
             recommendation: sharkRisk.recommendation,
           }
         : { level: "unknown", score: 0, recommendation: "No shark data available" },
-      topSpecies,
+      topSpecies: siteSpecies,
       warnings,
       explanation,
     };
@@ -286,7 +266,6 @@ function generateScoreExplanation(
   diveScore: DiveScore,
   fit: ConditionsFit,
   vis: { metres: number; rating: string; factors?: { name: string; impact: number; description: string }[]; explanation?: string },
-  topSpecies: SiteSpecies[],
   sharkRisk: { level: string; score: number } | null
 ): string {
   const parts: string[] = [];
@@ -370,22 +349,6 @@ function generateScoreExplanation(
   } else {
     parts.push(
       `The ${tideStateStr} tide isn't the best for this spot — ${site.bestConditions.tidePreference === "rising" ? "a rising tide would bring cleaner water in" : "higher tide would be better for access"}.`
-    );
-  }
-
-  // Species
-  const goodSpecies = topSpecies.filter(s => s.likelihood.score >= 50);
-  if (goodSpecies.length > 0) {
-    const speciesStr = goodSpecies
-      .slice(0, 3)
-      .map(s => `${s.name} (${s.likelihood.score}%)`)
-      .join(", ");
-    parts.push(
-      `Best chances today: ${speciesStr}.`
-    );
-  } else if (topSpecies.length > 0) {
-    parts.push(
-      `Fish activity is on the lower side — ${topSpecies[0].name} at ${topSpecies[0].likelihood.score}% is the best prospect.`
     );
   }
 
