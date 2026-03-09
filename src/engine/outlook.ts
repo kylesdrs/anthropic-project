@@ -122,7 +122,13 @@ function generateSummary(
 export function generate5DayOutlook(
   wwData: SwellConditions | null,
   omData: OpenMeteoDay[] | null,
-): FiveDayOutlook {
+): FiveDayOutlook | null {
+  // If both data sources are unavailable, don't produce a misleading outlook.
+  // Scoring zeros as "Great 8.8" is worse than showing nothing.
+  if (!wwData && !omData) {
+    return null;
+  }
+
   const today = new Date();
   const todayStr = today.toLocaleDateString("en-CA", { timeZone: "Australia/Sydney" });
 
@@ -150,7 +156,7 @@ export function generate5DayOutlook(
   // needs a site to evaluate conditions fit)
   const bestSite = northernBeachesSites[0]; // Bluefish Point
 
-  const days: OutlookDay[] = dates.map((date, idx) => {
+  const days: OutlookDay[] = (dates.map((date, idx) => {
     const om = omByDate.get(date);
     const dateObj = new Date(date + "T00:00:00+11:00");
     const dayName = idx === 0 ? "Today" : idx === 1 ? "Tmrw" : DAY_NAMES[dateObj.getDay()];
@@ -197,6 +203,9 @@ export function generate5DayOutlook(
 
     const hasWW = wwSwellH !== null;
     const hasOM = om !== null;
+
+    // Skip days where neither source has data — don't score zeros as good conditions
+    if (!hasWW && !hasOM) return null;
 
     // Merge: prefer WW for swell (days 1-3), OM for wind/rain supplement, OM-only for days 4-5
     const swell = {
@@ -303,7 +312,7 @@ export function generate5DayOutlook(
       summary,
       source,
     };
-  });
+  }).filter((d): d is OutlookDay => d !== null));
 
   return {
     days,

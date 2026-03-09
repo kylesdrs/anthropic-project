@@ -49,7 +49,7 @@ export interface VisibilityFactor {
 // --- Constants ---
 
 const FALLBACK_BASELINE = 6; // metres — typical Northern Beaches calm-day vis
-const MIN_VIS = 0.3;
+const MIN_VIS = 0.5; // Even in terrible conditions you can see your fins
 const MAX_VIS = 15;
 
 // Dirty water memory half-life in days (calm conditions)
@@ -115,16 +115,20 @@ export function estimateVisibility(
     .filter(f => f.impact < 0)
     .reduce((sum, f) => sum + f.impact, 0); // negative number
 
-  // Diminishing returns: first -3m at full weight, then 50%
+  // Diminishing returns: first -3m at full weight, then 35%.
+  // Multiple negative factors (rain + swell + wind) are partially correlated
+  // (SE wind creates SE swell which creates chop), so stacking them at full
+  // weight double-counts the impact. 35% excess rate prevents vis from
+  // collapsing to unrealistic lows (sub-1m) in merely bad conditions.
   const FULL_PENALTY_LIMIT = -3;
   let effectiveNegative: number;
   if (totalNegativeRaw >= FULL_PENALTY_LIMIT) {
     // Total penalties are mild (e.g. -2m) — apply fully
     effectiveNegative = totalNegativeRaw;
   } else {
-    // Apply first 3m at full weight, rest at 50%
+    // Apply first 3m at full weight, rest at 35%
     const excess = totalNegativeRaw - FULL_PENALTY_LIMIT; // negative number
-    effectiveNegative = FULL_PENALTY_LIMIT + excess * 0.5;
+    effectiveNegative = FULL_PENALTY_LIMIT + excess * 0.35;
   }
 
   let vis = baseline.value + totalPositive + effectiveNegative;
@@ -354,10 +358,10 @@ function calculateSwellEnergy(
     impact = -1.5;
     description = `Moderate ${height}m ${swellType} (${period}s, energy ${Math.round(energy)})${exposureNote}`;
   } else if (effectiveEnergy < 50) {
-    impact = -3;
+    impact = -2.5;
     description = `Strong ${height}m ${swellType} (${period}s, energy ${Math.round(energy)}) — significant bottom disturbance${exposureNote}`;
   } else {
-    impact = -4.5;
+    impact = -4;
     description = `Heavy ${height}m ${swellType} (${period}s, energy ${Math.round(energy)}) — severe turbidity${exposureNote}`;
   }
 
