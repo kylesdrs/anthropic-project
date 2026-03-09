@@ -23,6 +23,8 @@ import { northernBeachesSites, type DiveSite } from "../sites/northern-beaches";
 import { rankSites, type SiteRanking } from "./site-rank";
 import type { VisibilityEstimate } from "./visibility";
 import { estimateVisibility } from "./visibility";
+import { fetchOpenMeteo5Day } from "../data/open-meteo";
+import { generate5DayOutlook, type FiveDayOutlook } from "./outlook";
 
 // --- Types ---
 
@@ -45,6 +47,7 @@ export interface DiveBriefing {
   visibility: VisibilityEstimate | null;
   siteRankings: SiteRanking[];
   recommendation: BriefingRecommendation;
+  outlook: FiveDayOutlook | null;
 }
 
 export interface BriefingRecommendation {
@@ -117,10 +120,11 @@ export async function generateBriefing(options?: {
   const sites = options?.sites ?? northernBeachesSites;
 
   // Fetch all data in parallel
-  const [weather, swell, sharkActivity] = await Promise.all([
+  const [weather, swell, sharkActivity, omData] = await Promise.all([
     fetchWeatherData(),
     fetchSwellData(),
     fetchSharkActivity(),
+    fetchOpenMeteo5Day(),
   ]);
 
   // Track which data sources are available
@@ -205,6 +209,9 @@ export async function generateBriefing(options?: {
     timeOfDay
   );
 
+  // Generate 5-day outlook
+  const outlook = generate5DayOutlook(swell, omData);
+
   return {
     generatedAt: new Date().toISOString(),
     forecastHour: forecastHour ?? null,
@@ -218,6 +225,7 @@ export async function generateBriefing(options?: {
     visibility,
     siteRankings,
     recommendation,
+    outlook,
   };
 }
 

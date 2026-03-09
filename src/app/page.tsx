@@ -93,6 +93,26 @@ interface DiveBriefing {
     bestTimeWindow: string;
     keyFactors: string[];
   };
+  outlook: FiveDayOutlook | null;
+}
+
+interface OutlookDay {
+  date: string;
+  dayName: string;
+  isToday: boolean;
+  diveScore: number;
+  scoreLabel: string;
+  swell: { height: number; period: number; direction: string };
+  wind: { speed: number; direction: string };
+  rainProbability: number;
+  precis: string;
+  summary: string;
+  source: "WW" | "OM" | "WW+OM";
+}
+
+interface FiveDayOutlook {
+  days: OutlookDay[];
+  generatedAt: string;
 }
 
 interface SiteVisibility {
@@ -424,6 +444,65 @@ function rainColor(probability?: number): string {
   if (probability >= 70) return "text-blue-400";
   if (probability >= 40) return "text-blue-300/70";
   return "text-ocean-500";
+}
+
+// --- 5-Day Outlook ---
+
+function outlookRainIcon(probability: number): string {
+  if (probability >= 50) return "🌧";
+  if (probability >= 20) return "☁";
+  return "☀";
+}
+
+function FiveDayOutlookSection({ outlook }: { outlook: FiveDayOutlook }) {
+  return (
+    <section>
+      <SectionHeader title="5-Day Outlook" />
+      <div className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-hide">
+        {outlook.days.map((day) => (
+          <div
+            key={day.date}
+            className={`glass-card p-3 min-w-[140px] flex-1 snap-start relative ${
+              day.isToday ? "ring-1 ring-emerald-400/50" : ""
+            }`}
+          >
+            {/* Source indicator */}
+            <span className="absolute top-1.5 right-2 text-[8px] text-ocean-600 font-mono">
+              {day.source}
+            </span>
+
+            {/* Day name */}
+            <div className="text-[11px] font-semibold text-ocean-300 mb-2">
+              {day.dayName}
+            </div>
+
+            {/* Score */}
+            <div className={`text-2xl font-bold mb-0.5 ${scoreColor(day.diveScore)} ${scoreGlow(day.diveScore)}`}>
+              {day.diveScore.toFixed(1)}
+            </div>
+            <div className={`text-[10px] font-medium mb-3 ${scoreColor(day.diveScore)}`}>
+              {day.scoreLabel}
+            </div>
+
+            {/* Swell */}
+            <div className="text-[11px] text-ocean-400 mb-1">
+              {day.swell.height}m {day.swell.direction}
+            </div>
+
+            {/* Rain */}
+            <div className="text-[11px] text-ocean-400 mb-2">
+              {outlookRainIcon(day.rainProbability)} {day.rainProbability}%
+            </div>
+
+            {/* Summary */}
+            <div className="text-[9px] text-ocean-500 leading-snug">
+              {day.summary}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function ForecastTimeline({
@@ -1190,7 +1269,7 @@ export default function Dashboard() {
     );
   }
 
-  const { conditions, visibility, siteRankings, recommendation, dataStatus } = briefing;
+  const { conditions, visibility, siteRankings, recommendation, dataStatus, outlook } = briefing;
   const { weather, swell } = conditions;
   const obs = weather?.observation ?? null;
   const topScore = siteRankings[0]?.diveScore.overall ?? 0;
@@ -1390,6 +1469,11 @@ export default function Dashboard() {
             onSelectHour={handleHourChange}
           />
         </section>
+      )}
+
+      {/* 5-Day Outlook */}
+      {outlook && outlook.days.length > 0 && (
+        <FiveDayOutlookSection outlook={outlook} />
       )}
 
       {/* Visibility factors */}

@@ -269,6 +269,40 @@ export function generateMockBriefing() {
         warnings: ["Swell 1.2m exceeds site max 0.8m"],
       },
     ],
+    outlook: {
+      days: Array.from({ length: 5 }, (_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() + i);
+        const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const dayName = i === 0 ? "Today" : i === 1 ? "Tmrw" : dayNames[d.getDay()];
+        const scores = [7.2, 6.0, 7.8, 5.1, 4.2];
+        const labels = ["Good", "Fair", "Good", "Fair", "Marginal"];
+        const swells = [1.2, 1.0, 0.6, 1.3, 1.8];
+        const dirs = ["SSE", "E", "NE", "S", "S"];
+        const rains = [10, 25, 5, 35, 55];
+        const summaries = [
+          "Light offshore, looks clean",
+          "Small swell, manageable conditions",
+          "Clean conditions — could be great",
+          "Shower risk — vis may drop",
+          "Rain expected — vis will suffer",
+        ];
+        return {
+          date: d.toLocaleDateString("en-CA", { timeZone: "Australia/Sydney" }),
+          dayName,
+          isToday: i === 0,
+          diveScore: scores[i],
+          scoreLabel: labels[i],
+          swell: { height: swells[i], period: 10, direction: dirs[i] },
+          wind: { speed: 8, direction: "W" },
+          rainProbability: rains[i],
+          precis: rains[i] > 40 ? "Showers" : "Partly cloudy",
+          summary: summaries[i],
+          source: (i < 3 ? "WW" : "OM") as "WW" | "OM" | "WW+OM",
+        };
+      }),
+      generatedAt: new Date().toISOString(),
+    },
     recommendation: {
       go: true,
       confidence: "high",
@@ -281,7 +315,7 @@ export function generateMockBriefing() {
         "Wind: NW 8kt",
         "Tide: rising",
         "Rain: 5d since significant rain",
-        "Best chances: Yellowtail Kingfish (65%), Silver Trevally (58%)",
+        "5d since significant rain — water should be clear",
       ],
     },
   };
