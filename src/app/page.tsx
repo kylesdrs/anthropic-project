@@ -836,6 +836,227 @@ function buildTimeOptions(): { value: string; label: string }[] {
   return options;
 }
 
+// --- Vis Report Section ---
+
+interface VisReportForm {
+  siteId: string;
+  reportedVis: string;
+  diverName: string;
+  notes: string;
+}
+
+interface SubmittedReport {
+  id: string;
+  siteName: string;
+  reportedVis: number;
+  diverName: string;
+  modelPrediction: { metres: number; rating: string } | null;
+  delta: number | null;
+  submittedAt: string;
+  notes: string;
+}
+
+function VisReportSection({ siteRankings }: { siteRankings: SiteRanking[] }) {
+  const [open, setOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [recentReports, setRecentReports] = useState<SubmittedReport[]>([]);
+  const [form, setForm] = useState<VisReportForm>({
+    siteId: "",
+    reportedVis: "",
+    diverName: "",
+    notes: "",
+  });
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Load recent reports on open
+  useEffect(() => {
+    if (!open) return;
+    fetch("/api/calibration")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.recentReports) setRecentReports(data.recentReports.slice(0, 5));
+      })
+      .catch(() => {});
+  }, [open]);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.siteId || !form.reportedVis || !form.diverName) return;
+
+    setSubmitting(true);
+    setMessage(null);
+
+    try {
+      const res = await fetch("/api/calibration", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          siteId: form.siteId,
+          reportedVis: parseFloat(form.reportedVis),
+          diverName: form.diverName.trim(),
+          notes: form.notes.trim() || undefined,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setMessage({ type: "error", text: data.error || "Failed to submit report" });
+        return;
+      }
+
+      setMessage({ type: "success", text: data.comparison || "Report submitted!" });
+      setForm((f) => ({ ...f, reportedVis: "", notes: "" }));
+
+      // Refresh reports
+      const summary = await fetch("/api/calibration").then((r) => r.json());
+      if (summary.recentReports) setRecentReports(summary.recentReports.slice(0, 5));
+    } catch {
+      setMessage({ type: "error", text: "Network error — try again" });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <section>
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-4 py-3 glass-card hover:bg-white/[0.04] transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <svg className="w-4 h-4 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <span className="text-sm font-medium text-ocean-200">Submit Vis Report</span>
+        </div>
+        <svg
+          className={`w-4 h-4 text-ocean-400 transition-transform ${open ? "rotate-180" : ""}`}
+          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="glass-card mt-2 p-4 space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-3">
+            {/* Site selector */}
+            <div>
+              <label className="block text-xs text-ocean-400 mb-1">Dive Site</label>
+              <select
+                value={form.siteId}
+                onChange={(e) => setForm((f) => ({ ...f, siteId: e.target.value }))}
+                className="w-full bg-ocean-900/60 border border-ocean-700/40 rounded-lg px-3 py-2 text-sm text-ocean-100 focus:outline-none focus:border-teal-500/40"
+                required
+              >
+                <option value="">Select site...</option>
+                {siteRankings.map((r) => (
+                  <option key={r.site.id} value={r.site.id}>{r.site.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Vis + Diver name row */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-ocean-400 mb-1">Vis (metres)</label>
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  max="30"
+                  value={form.reportedVis}
+                  onChange={(e) => setForm((f) => ({ ...f, reportedVis: e.target.value }))}
+                  placeholder="e.g. 4"
+                  className="w-full bg-ocean-900/60 border border-ocean-700/40 rounded-lg px-3 py-2 text-sm text-ocean-100 focus:outline-none focus:border-teal-500/40"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-ocean-400 mb-1">Your Name</label>
+                <input
+                  type="text"
+                  value={form.diverName}
+                  onChange={(e) => setForm((f) => ({ ...f, diverName: e.target.value }))}
+                  placeholder="e.g. Kyle"
+                  className="w-full bg-ocean-900/60 border border-ocean-700/40 rounded-lg px-3 py-2 text-sm text-ocean-100 focus:outline-none focus:border-teal-500/40"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div>
+              <label className="block text-xs text-ocean-400 mb-1">Notes (optional)</label>
+              <input
+                type="text"
+                value={form.notes}
+                onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                placeholder="e.g. Murky below 8m, clear on top"
+                className="w-full bg-ocean-900/60 border border-ocean-700/40 rounded-lg px-3 py-2 text-sm text-ocean-100 focus:outline-none focus:border-teal-500/40"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={submitting}
+              className="w-full py-2.5 rounded-xl bg-teal-500/15 text-teal-400 text-sm font-medium border border-teal-500/20 hover:bg-teal-500/25 transition-colors disabled:opacity-50"
+            >
+              {submitting ? "Submitting..." : "Submit Report"}
+            </button>
+          </form>
+
+          {/* Feedback message */}
+          {message && (
+            <div
+              className={`text-sm px-3 py-2 rounded-lg ${
+                message.type === "success"
+                  ? "bg-teal-500/10 border border-teal-500/20 text-teal-300"
+                  : "bg-red-500/10 border border-red-500/20 text-red-300"
+              }`}
+            >
+              {message.text}
+            </div>
+          )}
+
+          {/* Recent reports */}
+          {recentReports.length > 0 && (
+            <div>
+              <h4 className="text-xs text-ocean-400 font-medium mb-2">Recent Reports</h4>
+              <div className="space-y-2">
+                {recentReports.map((r) => (
+                  <div key={r.id} className="bg-ocean-900/40 border border-ocean-700/30 rounded-lg px-3 py-2 text-xs">
+                    <div className="flex justify-between items-start">
+                      <span className="text-ocean-200 font-medium">{r.siteName}</span>
+                      <span className="text-ocean-500">{r.diverName}</span>
+                    </div>
+                    <div className="flex gap-3 mt-1 text-ocean-300">
+                      <span>Reported: <span className="text-teal-400">{r.reportedVis}m</span></span>
+                      {r.modelPrediction && (
+                        <span>Model: <span className="text-ocean-200">{r.modelPrediction.metres}m</span></span>
+                      )}
+                      {r.delta !== null && (
+                        <span>
+                          Delta:{" "}
+                          <span className={r.delta > 0 ? "text-green-400" : r.delta < 0 ? "text-red-400" : "text-ocean-300"}>
+                            {r.delta > 0 ? "+" : ""}{r.delta}m
+                          </span>
+                        </span>
+                      )}
+                    </div>
+                    {r.notes && <p className="text-ocean-500 mt-1">{r.notes}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
 // --- Main Dashboard ---
 
 export default function Dashboard() {
@@ -1239,6 +1460,9 @@ export default function Dashboard() {
           </div>
         </section>
       )}
+
+      {/* Vis Report Section */}
+      <VisReportSection siteRankings={siteRankings} />
 
       {/* Footer */}
       <footer className="text-center pb-10 pt-4">
