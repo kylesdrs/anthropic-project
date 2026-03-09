@@ -241,14 +241,14 @@ function assessConditionsFit(
   site: DiveSite,
   input: RankingInput
 ): ConditionsFit {
-  const swellOk =
-    input.swell.current.height <= site.bestConditions.swellMax;
+  // Use directional swell threshold if available, otherwise fall back to global max
+  const swellDir = input.swell.current.direction;
+  const dirThreshold = getDirectionalSwellMax(site, swellDir);
+  const swellOk = input.swell.current.height <= dirThreshold;
 
   const swellProtected =
     site.bestConditions.swellDirectionProtected.length === 0 ||
-    site.bestConditions.swellDirectionProtected.includes(
-      input.swell.current.direction
-    );
+    site.bestConditions.swellDirectionProtected.includes(swellDir);
 
   const windIdeal = site.bestConditions.windDirectionIdeal.includes(
     input.weather.observation.windDirection
@@ -326,11 +326,11 @@ function generateScoreExplanation(
       ? `, and the ${swell.direction} direction is one this spot handles well`
       : `, though the ${swell.direction} swell direction isn't ideal — the site is more exposed from that angle`;
     parts.push(
-      `The ${swell.height}m swell at ${swell.period}s is within the ${site.bestConditions.swellMax}m limit${protectedNote}.`
+      `The ${swell.height}m swell at ${swell.period}s is within the ${getDirectionalSwellMax(site, swell.direction)}m limit for ${swell.direction} swell${protectedNote}.`
     );
   } else {
     parts.push(
-      `The ${swell.height}m swell exceeds this site's ${site.bestConditions.swellMax}m safe limit, which is the main concern.`
+      `The ${swell.height}m ${swell.direction} swell exceeds this site's ${getDirectionalSwellMax(site, swell.direction)}m safe limit from that direction, which is the main concern.`
     );
   }
 
@@ -433,8 +433,9 @@ function generateWarnings(
   }
 
   if (!fit.swellOk) {
+    const dirMax = getDirectionalSwellMax(site, input.swell.current.direction);
     warnings.push(
-      `Swell ${input.swell.current.height}m exceeds site max ${site.bestConditions.swellMax}m`
+      `Swell ${input.swell.current.height}m ${input.swell.current.direction} exceeds site limit ${dirMax}m from that direction`
     );
   }
 
@@ -463,4 +464,36 @@ function generateWarnings(
   }
 
   return warnings;
+}
+
+/**
+ * Get the maximum safe swell height for a site from a given direction.
+ * Uses directional thresholds if available, falls back to global swellMax.
+ * Normalises 16-point compass to 8-point for matching (SSE → S, etc).
+ */
+function getDirectionalSwellMax(site: DiveSite, direction: string): number {
+  const thresholds = site.swellThresholds;
+  if (!thresholds || Object.keys(thresholds).length === 0) {
+    return site.bestConditions.swellMax;
+  }
+
+  // Try exact match first
+  if (thresholds[direction] !== undefined) return thresholds[direction]!;
+
+  // Normalise to 8-point and try
+  const normalised = normalise8Point(direction);
+  if (thresholds[normalised] !== undefined) return thresholds[normalised]!;
+
+  // Fall back to global max
+  return site.bestConditions.swellMax;
+}
+
+function normalise8Point(dir: string): string {
+  const map: Record<string, string> = {
+    N: "N", NNE: "NE", NE: "NE", ENE: "E",
+    E: "E", ESE: "SE", SE: "SE", SSE: "S",
+    S: "S", SSW: "SW", SW: "SW", WSW: "W",
+    W: "W", WNW: "NW", NW: "NW", NNW: "N",
+  };
+  return map[dir] ?? dir;
 }

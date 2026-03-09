@@ -48,7 +48,7 @@ export interface VisibilityFactor {
 
 // --- Constants ---
 
-const FALLBACK_BASELINE = 4; // metres — used when no site provided
+const FALLBACK_BASELINE = 6; // metres — typical Northern Beaches calm-day vis
 const MIN_VIS = 0.3;
 const MAX_VIS = 15;
 
@@ -69,22 +69,18 @@ export function estimateVisibility(
 
   // --- 1. Site-specific baseline with seasonal curve ---
   const baseline = calculateBaseline(input.month, site);
-  let vis = baseline.value;
   factors.push(baseline.factor);
 
   // --- 2. Dirty water memory (D-Memory) turbidity ---
   const turbidity = calculateTurbidity(input.rainfall, input.swell, site);
-  vis += turbidity.impact;
   factors.push(turbidity);
 
   // --- 3. Swell energy (height² × period), not just height ---
   const swellImpact = calculateSwellEnergy(input.swell, input.swellTrend, site);
-  vis += swellImpact.impact;
   factors.push(swellImpact);
 
   // --- 4. Six-phase tidal model ---
   const tideImpact = calculateTidePhaseImpact(input.tides);
-  vis += tideImpact.impact;
   factors.push(tideImpact);
 
   // --- 5. Wind surface mixing (depth-based sensitivity) ---
@@ -94,20 +90,44 @@ export function estimateVisibility(
     Math.round(effectiveWind),
     site
   );
-  vis += windImpact.impact;
   factors.push(windImpact);
 
   // --- 6. SST / EAC influence ---
   const sstImpact = calculateSSTImpact(input.seaSurfaceTemp);
-  vis += sstImpact.impact;
   factors.push(sstImpact);
 
   // --- 7. Cloud cover (light penetration) ---
   if (input.cloud) {
     const cloudImpact = calculateCloudImpact(input.cloud);
-    vis += cloudImpact.impact;
     factors.push(cloudImpact);
   }
+
+  // --- Apply factors with diminishing returns on stacked penalties ---
+  // In reality, multiple negative factors don't fully compound — there's
+  // a floor to how bad vis can get from stacking. Apply full impact for
+  // the first 3m of penalties, then 50% for additional penalties.
+  // Positive factors always apply fully (good conditions genuinely help).
+  const nonBaselineFactors = factors.filter(f => f.name !== "Baseline");
+  const totalPositive = nonBaselineFactors
+    .filter(f => f.impact > 0)
+    .reduce((sum, f) => sum + f.impact, 0);
+  const totalNegativeRaw = nonBaselineFactors
+    .filter(f => f.impact < 0)
+    .reduce((sum, f) => sum + f.impact, 0); // negative number
+
+  // Diminishing returns: first -3m at full weight, then 50%
+  const FULL_PENALTY_LIMIT = -3;
+  let effectiveNegative: number;
+  if (totalNegativeRaw >= FULL_PENALTY_LIMIT) {
+    // Total penalties are mild (e.g. -2m) — apply fully
+    effectiveNegative = totalNegativeRaw;
+  } else {
+    // Apply first 3m at full weight, rest at 50%
+    const excess = totalNegativeRaw - FULL_PENALTY_LIMIT; // negative number
+    effectiveNegative = FULL_PENALTY_LIMIT + excess * 0.5;
+  }
+
+  let vis = baseline.value + totalPositive + effectiveNegative;
 
   // Clamp
   vis = Math.max(MIN_VIS, Math.min(MAX_VIS, vis));
@@ -120,7 +140,8 @@ export function estimateVisibility(
   const rating = visRating(vis);
 
   // Build per-site explanation string
-  const explanation = buildExplanation(vis, baseline.value, factors, input.month, site);
+  const wasDampened = totalNegativeRaw < FULL_PENALTY_LIMIT;
+  const explanation = buildExplanation(vis, baseline.value, factors, input.month, site, wasDampened);
 
   return { metres: vis, confidence, rating, factors, explanation };
 }
@@ -242,8 +263,10 @@ function calculateTurbidity(
       description = "No significant recent rainfall";
     }
   } else {
-    // Turbid — penalty scales with turbidity score
-    impact = -Math.min(rawTurbidity * 0.2, 5);
+    // Turbid — penalty scales with turbidity score.
+    // 0.15 conversion: 7 turbidity units ≈ -1m, 20 units ≈ -3m, capped at -4.5m.
+    // Calibrated against Abyss data: moderate rain (5-10mm 48h) ≈ -1 to -2m vis.
+    impact = -Math.min(rawTurbidity * 0.15, 4.5);
     impact = Math.round(impact * 10) / 10;
 
     // Build descriptive explanation
@@ -430,15 +453,17 @@ function calculateWindMixing(
       description = `Light offshore ${direction} ${speed}kt — slightly improving conditions`;
     }
   } else if (onshore.includes(direction)) {
-    // Onshore impact scaled by wind sensitivity (depth-based)
+    // Onshore impact scaled by wind sensitivity (depth-based).
+    // Calibrated: 10kt onshore ≈ -1m at normal sensitivity,
+    // 15kt ≈ -1.5m, 20kt+ ≈ -2.5m. Shallow sites scale up.
     if (speed >= 20) {
-      impact = -3 * sensitivity;
+      impact = -2.5 * sensitivity;
       description = `Strong onshore ${direction} ${speed}kt — heavy surface mixing`;
     } else if (speed >= 15) {
-      impact = -2 * sensitivity;
+      impact = -1.5 * sensitivity;
       description = `Moderate-strong onshore ${direction} ${speed}kt — significant surface mixing`;
     } else if (speed >= 10) {
-      impact = -1.5 * sensitivity;
+      impact = -1 * sensitivity;
       description = `Moderate onshore ${direction} ${speed}kt — chop and turbidity`;
     } else {
       impact = -0.5 * sensitivity;
@@ -453,10 +478,10 @@ function calculateWindMixing(
   } else {
     // Cross-shore (N or S)
     if (speed >= 20) {
-      impact = -1.5 * sensitivity;
+      impact = -1.2 * sensitivity;
       description = `Strong ${direction} ${speed}kt — cross-shore creating significant chop`;
     } else if (speed >= 10) {
-      impact = -0.5 * sensitivity;
+      impact = -0.4 * sensitivity;
       description = `Moderate ${direction} ${speed}kt — some surface disturbance`;
     } else {
       impact = 0;
@@ -520,10 +545,10 @@ function calculateCloudImpact(cloud: string): VisibilityFactor {
   let description: string;
 
   if (oktas >= 7) {
-    impact = -1;
+    impact = -0.5;
     description = `Overcast skies (${cloud}) — reduced light penetration, harder to see underwater`;
   } else if (oktas >= 5) {
-    impact = -0.5;
+    impact = -0.3;
     description = `Mostly cloudy (${cloud}) — less light reaching the water`;
   } else if (oktas <= 2) {
     impact = 0.5;
@@ -603,7 +628,8 @@ function buildExplanation(
   baselineVis: number,
   factors: VisibilityFactor[],
   month: number,
-  site?: DiveSite
+  site?: DiveSite,
+  wasDampened?: boolean
 ): string {
   const siteName = site?.name ?? "General";
   const monthName = [
@@ -621,8 +647,9 @@ function buildExplanation(
 
   const baseDesc = `site baseline ${baselineVis}m in ${monthName}`;
   const modStr = modifiers.length > 0 ? `, ${modifiers.join(", ")}` : "";
+  const dampenNote = wasDampened ? " [penalties dampened — diminishing returns]" : "";
 
-  return `Vis at ${siteName}: ~${finalVis}m (${baseDesc}${modStr})`;
+  return `Vis at ${siteName}: ~${finalVis}m (${baseDesc}${modStr})${dampenNote}`;
 }
 
 // --- Helpers ---
