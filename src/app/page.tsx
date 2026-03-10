@@ -39,6 +39,7 @@ interface WeatherForecastPoint {
 interface DiveBriefing {
   generatedAt: string;
   forecastHour: number | null;
+  selectedSiteId: string | null;
   timeOfDay: string;
   dataStatus: DataSourceStatus;
   conditions: {
@@ -1295,6 +1296,9 @@ export default function Dashboard() {
   const { weather, swell } = conditions;
   const obs = weather?.observation ?? null;
   const topScore = siteRankings[0]?.diveScore.overall ?? 0;
+  const activeSiteName = selectedSite !== "all"
+    ? SITE_COORDS.find((s) => s.id === selectedSite)?.name
+    : undefined;
 
   // Identify unavailable data sources
   const unavailableSources = [
@@ -1403,7 +1407,7 @@ export default function Dashboard() {
         <div className="relative z-10 flex flex-col sm:flex-row items-center gap-5 sm:gap-8">
           <div className="text-center sm:text-left flex-1 space-y-4">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ocean-400">
-              Dive Briefing · {briefing.timeOfDay}
+              Dive Briefing · {briefing.timeOfDay}{activeSiteName ? ` · ${activeSiteName}` : ""}
             </p>
             <h2 className="text-xl sm:text-2xl text-white font-bold leading-snug text-balance">
               {recommendation.summary}
@@ -1446,7 +1450,7 @@ export default function Dashboard() {
 
       {/* Conditions Strip */}
       <section>
-        <SectionHeader title="Current Conditions" />
+        <SectionHeader title="Current Conditions" subtitle={activeSiteName ? `At ${activeSiteName}` : undefined} />
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 stagger-children">
           <ConditionCard
             icon="~"
@@ -1515,7 +1519,7 @@ export default function Dashboard() {
       {/* Visibility factors */}
       {visibility && (
         <section>
-          <SectionHeader title="Visibility Breakdown" />
+          <SectionHeader title="Visibility Breakdown" subtitle={activeSiteName ? `At ${activeSiteName}` : undefined} />
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 stagger-children">
             {visibility.factors.map((f) => (
               <div

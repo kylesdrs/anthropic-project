@@ -37,6 +37,7 @@ export interface DataSourceStatus {
 export interface DiveBriefing {
   generatedAt: string;
   forecastHour: number | null; // null = current conditions, 0-23 = forecast for that AEST hour
+  selectedSiteId: string | null; // null = all sites, or specific site id
   timeOfDay: "night" | "dawn" | "morning" | "midday" | "afternoon" | "dusk";
   dataStatus: DataSourceStatus;
   conditions: {
@@ -205,13 +206,36 @@ export async function generateBriefing(options?: {
     });
   }
 
+  // When a specific site is selected, reorder rankings so it comes first.
+  // This makes generateRecommendation focus on the selected site.
+  if (selectedSite && siteRankings.length > 0) {
+    const idx = siteRankings.findIndex((r) => r.site.id === selectedSite.id);
+    if (idx > 0) {
+      const picked = siteRankings[idx];
+      siteRankings = [picked, ...siteRankings.slice(0, idx), ...siteRankings.slice(idx + 1)];
+    }
+  }
+
+  // Use site-specific visibility when a site is selected
+  const activeVisibility = selectedSite
+    ? siteRankings[0]?.visibility
+      ? {
+          metres: siteRankings[0].visibility.metres,
+          rating: siteRankings[0].visibility.rating as VisibilityEstimate["rating"],
+          confidence: siteRankings[0].visibility.confidence as VisibilityEstimate["confidence"],
+          factors: siteRankings[0].visibility.factors,
+          explanation: siteRankings[0].visibility.explanation,
+        }
+      : visibility
+    : visibility;
+
   // Generate 5-day outlook (needed before recommendation for forward-looking advice)
   const outlook = generate5DayOutlook(swell, omData, selectedSite);
 
   // Generate recommendation
   const recommendation = generateRecommendation(
     siteRankings,
-    visibility,
+    activeVisibility,
     weather,
     swell,
     timeOfDay,
@@ -221,6 +245,7 @@ export async function generateBriefing(options?: {
   return {
     generatedAt: new Date().toISOString(),
     forecastHour: forecastHour ?? null,
+    selectedSiteId: selectedSite?.id ?? null,
     timeOfDay,
     dataStatus,
     conditions: {
@@ -228,7 +253,7 @@ export async function generateBriefing(options?: {
       swell,
       sharkActivity,
     },
-    visibility,
+    visibility: activeVisibility,
     siteRankings,
     recommendation,
     outlook,
