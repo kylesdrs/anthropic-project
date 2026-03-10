@@ -24,7 +24,7 @@ import { rankSites, type SiteRanking } from "./site-rank";
 import type { VisibilityEstimate } from "./visibility";
 import { estimateVisibility } from "./visibility";
 import { fetchOpenMeteo5Day } from "../data/open-meteo";
-import { generate5DayOutlook, type FiveDayOutlook } from "./outlook";
+import { generate5DayOutlook, type FiveDayOutlook, type OutlookDay } from "./outlook";
 
 // --- Types ---
 
@@ -200,17 +200,18 @@ export async function generateBriefing(options?: {
     });
   }
 
+  // Generate 5-day outlook (needed before recommendation for forward-looking advice)
+  const outlook = generate5DayOutlook(swell, omData);
+
   // Generate recommendation
   const recommendation = generateRecommendation(
     siteRankings,
     visibility,
     weather,
     swell,
-    timeOfDay
+    timeOfDay,
+    outlook
   );
-
-  // Generate 5-day outlook
-  const outlook = generate5DayOutlook(swell, omData);
 
   return {
     generatedAt: new Date().toISOString(),
@@ -346,26 +347,259 @@ function interpolateWindForHour(
 
 // --- Recommendation logic ---
 
+// --- Helpers for natural language generation ---
+
+/** Short site name for conversational use (drop parenthetical suffixes). */
+function shortName(name: string): string {
+  // "Freshwater Headland (Queenscliff End)" → "Freshie"
+  // "North Head (Manly)" → "North Head"
+  const nicknames: Record<string, string> = {
+    "Bluefish Point": "Bluefish",
+    "Freshwater Headland (Queenscliff End)": "Freshie",
+    "Long Reef": "Long Reef",
+    "Narrabeen Head": "Narra",
+    "North Head (Manly)": "North Head",
+    "Curl Curl Headland": "Curly",
+    "Dee Why Head": "Dee Why",
+  };
+  return nicknames[name] ?? name.replace(/\s*\(.*\)/, "");
+}
+
+/** Explain why the site is the pick based on its attributes and conditions. */
+function siteContextReason(site: SiteRanking): string {
+  const depth = site.site.depthRange;
+  const avgDepth = (depth.min + depth.max) / 2;
+
+  // Deep site advantage
+  if (avgDepth >= 15) {
+    return "it's deep enough to dodge the dirty surface water";
+  }
+
+  // Sheltered from current swell
+  if (site.conditionsFit.swellProtected) {
+    return "it's sheltered from the swell";
+  }
+
+  // Good conditions fit
+  if (site.conditionsFit.windIdeal) {
+    return "the wind's offshore there";
+  }
+
+  // Low runoff sensitivity
+  if (site.site.runoffSensitivity < 0.8) {
+    return "it's away from the lagoon outflows";
+  }
+
+  // Fallback — reef spillover etc
+  if (site.site.id === "bluefish-point") {
+    return "the reserve spillover keeps the fish numbers up";
+  }
+
+  return "it's your best option right now";
+}
+
+/** Describe what's killing the vis in plain language. */
+function visCausePhrase(
+  site: SiteRanking,
+  weather: WeatherConditions,
+  swell: SwellConditions
+): string {
+  const parts: string[] = [];
+
+  // Rain impact
+  if (weather.rainfall.last24h >= 10) {
+    parts.push("yesterday's rain still washing out");
+  } else if (weather.rainfall.last24h >= 5) {
+    parts.push("recent rain runoff");
+  } else if (weather.rainfall.daysSinceSignificantRain <= 2) {
+    const days = weather.rainfall.daysSinceSignificantRain;
+    parts.push(days === 0 ? "today's rain" : days === 1 ? "yesterday's rain still flushing through" : "rain from a couple days ago");
+  }
+
+  // Swell stirring things up
+  if (swell.current.height >= 1.5) {
+    parts.push(`${swell.current.height}m of ${swell.current.direction} swell churning things up`);
+  } else if (swell.current.height >= 1.0) {
+    parts.push(`the ${swell.current.direction} swell stirring up the bottom`);
+  }
+
+  // Onshore wind
+  const onshore = new Set(["E", "ENE", "NE", "ESE", "SE", "SSE", "S"]);
+  if (onshore.has(weather.observation.windDirection) && weather.observation.windSpeed >= 12) {
+    parts.push("onshore wind mixing up the surface");
+  }
+
+  if (parts.length === 0) return "";
+  if (parts.length === 1) return ` from ${parts[0]}`;
+  return ` from ${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
+/** Describe the swell warning for a site in plain language. */
+function swellWarningPhrase(site: SiteRanking, swell: SwellConditions): string {
+  if (site.conditionsFit.swellOk) return "";
+
+  const ht = swell.current.height;
+  const dir = swell.current.direction;
+  const name = shortName(site.site.name);
+
+  // Site-specific colour
+  if (site.site.id === "long-reef") {
+    return `${name}'s a washing machine today — ${ht}m of ${dir} straight onto the platform.`;
+  }
+  if (site.site.id === "curl-curl-headland" || site.site.id === "dee-why-head") {
+    return `${name}'s getting smashed by ${ht}m of ${dir}.`;
+  }
+  if (site.site.id === "north-head") {
+    return `North Head's too hairy with ${ht}m hitting from the ${dir}.`;
+  }
+
+  return `${ht}m of ${dir} swell is too much for ${name}.`;
+}
+
+/**
+ * Find the next significantly better day from the outlook.
+ * Returns a phrase like "Friday's looking way better" or null.
+ */
+function forwardLookPhrase(
+  currentScore: number,
+  outlook: FiveDayOutlook | null
+): string | null {
+  if (!outlook || outlook.days.length < 2) return null;
+
+  // Skip today (index 0), look at coming days
+  const futureDays = outlook.days.filter((d) => !d.isToday);
+  if (futureDays.length === 0) return null;
+
+  // Find the first day that's significantly better (at least 2 points or score >= 6.5)
+  const betterDay = futureDays.find(
+    (d) => d.diveScore >= currentScore + 2 || (d.diveScore >= 6.5 && currentScore < 5)
+  );
+
+  if (!betterDay) {
+    // If conditions are bad now but the whole week is bad, say so
+    if (currentScore < 4) {
+      return "Not much improvement in the forecast either — patience.";
+    }
+    return null;
+  }
+
+  const dayLabel = dayNameToNatural(betterDay.dayName);
+  const reason = betterDay.swell.height < 1.0
+    ? "with the swell dropping"
+    : betterDay.wind.speed < 10
+      ? "with lighter winds"
+      : "looking cleaner";
+
+  const cap = dayLabel.charAt(0).toUpperCase() + dayLabel.slice(1);
+
+  if (currentScore < 4) {
+    return `I'd hold off — ${dayLabel}'s shaping up way better ${reason}.`;
+  }
+  return `${cap} looks even better if you can wait.`;
+}
+
+function dayNameToNatural(dayName: string): string {
+  const map: Record<string, string> = {
+    "Today": "later today",
+    "Tmrw": "tomorrow",
+    "Mon": "Monday",
+    "Tue": "Tuesday",
+    "Wed": "Wednesday",
+    "Thu": "Thursday",
+    "Fri": "Friday",
+    "Sat": "Saturday",
+    "Sun": "Sunday",
+  };
+  return map[dayName] ?? dayName;
+}
+
+/** Natural time advice — "Get in before 10" style. */
+function timeAdvicePhrase(
+  weather: WeatherConditions,
+  swell: SwellConditions,
+  timeOfDay: string,
+  bestScore: number,
+  vis: VisibilityEstimate | null
+): string {
+  // Bad conditions — no point giving time advice
+  const visAwful = vis && vis.metres < 1.5;
+  if (bestScore < 5 || visAwful) {
+    if (swell.trend === "dropping") {
+      return "Swell's dropping so it might come good later, but I wouldn't bank on it";
+    }
+    return "Give it a miss today";
+  }
+
+  const tideState = weather.tides.currentState;
+
+  // Building swell — urgency
+  if (swell.trend === "building") {
+    if (timeOfDay === "dawn" || timeOfDay === "morning") {
+      return "Get in early — swell's building and it'll be worse this arvo";
+    }
+    return "Go now if you're going — swell's only getting bigger";
+  }
+
+  // Morning + likely sea breeze
+  if (timeOfDay === "dawn" || timeOfDay === "morning") {
+    const onshore = new Set(["E", "ENE", "NE", "ESE", "SE"]);
+    if (!onshore.has(weather.observation.windDirection)) {
+      return "Get in before 10 — the nor'easter usually kicks in by midday";
+    }
+    return "Already onshore so don't expect it to get better this arvo";
+  }
+
+  // Afternoon
+  if (timeOfDay === "afternoon" || timeOfDay === "midday") {
+    if (swell.trend === "dropping") {
+      return "Swell's easing — tomorrow morning could be mint";
+    }
+    return "Best window's probably passed — early tomorrow might be better";
+  }
+
+  // Rising tide
+  if (tideState === "early_rising" || tideState === "mid_rising") {
+    return "Tide's pushing in which helps — go now";
+  }
+
+  if (weather.tides.nextHigh) {
+    const nextHighTime = new Date(weather.tides.nextHigh.time);
+    const hoursUntilHigh = (nextHighTime.getTime() - Date.now()) / (1000 * 60 * 60);
+    if (hoursUntilHigh > 0 && hoursUntilHigh <= 4) {
+      const timeStr = nextHighTime.toLocaleTimeString("en-AU", {
+        hour: "numeric",
+        minute: "2-digit",
+      });
+      return `Aim for the incoming tide — high's at ${timeStr}`;
+    }
+  }
+
+  return "Early morning's your best bet";
+}
+
+// --- Main recommendation generator ---
+
 function generateRecommendation(
   rankings: SiteRanking[],
   visibility: VisibilityEstimate | null,
   weather: WeatherConditions | null,
   swell: SwellConditions | null,
-  timeOfDay: string
+  timeOfDay: string,
+  outlook: FiveDayOutlook | null
 ): BriefingRecommendation {
-  // Night time — no diving possible
+  // Night time
   if (timeOfDay === "night") {
     return {
       go: false,
       confidence: "high",
-      summary: "Too dark to dive. No natural light — spearfishing is not possible at this hour.",
+      summary: "It's dark, mate. Can't spear what you can't see. Earliest you'd want to be in is around dawn, 5-6am.",
       bestSite: "None",
-      bestTimeWindow: "Wait for daylight — earliest safe diving is around dawn (5-6am)",
-      keyFactors: ["No natural light — cannot see underwater"],
+      bestTimeWindow: "Wait for first light — 5-6am",
+      keyFactors: ["No natural light"],
     };
   }
 
-  // If critical data is missing, we can't make a recommendation
+  // Missing data
   if (!weather || !swell) {
     const missing: string[] = [];
     if (!weather) missing.push("weather");
@@ -373,9 +607,9 @@ function generateRecommendation(
     return {
       go: false,
       confidence: "low",
-      summary: `Cannot assess conditions — ${missing.join(" and ")} data unavailable. Check back later or assess conditions on-site.`,
+      summary: `Can't get a read on conditions — ${missing.join(" and ")} data's not coming through. Have a look yourself or check back in a bit.`,
       bestSite: "Unknown",
-      bestTimeWindow: "Unable to determine — insufficient data",
+      bestTimeWindow: "Check back later",
       keyFactors: missing.map((s) => `${s}: data unavailable`),
     };
   }
@@ -383,10 +617,7 @@ function generateRecommendation(
   const bestSite = rankings[0];
   const bestScore = bestSite?.diveScore.overall ?? 0;
 
-  // Use the best site's visibility (includes site-specific modifiers like
-  // swell direction shelter, depth bonus, estuary proximity) rather than
-  // the generic estimate. This prevents contradictory vis numbers in the
-  // recommendation text.
+  // Site-specific vis
   const siteVis: VisibilityEstimate | null = bestSite?.visibility
     ? {
         metres: bestSite.visibility.metres,
@@ -397,10 +628,8 @@ function generateRecommendation(
       }
     : visibility;
 
-  // Should we go?
   const go = bestScore >= 5;
 
-  // Confidence in the recommendation
   let confidence: BriefingRecommendation["confidence"] = "medium";
   if (siteVis?.confidence === "high" && bestScore >= 7) {
     confidence = "high";
@@ -408,19 +637,9 @@ function generateRecommendation(
     confidence = "low";
   }
 
-  // Summary
-  const summary = generateSummary(bestSite, bestScore, siteVis, swell);
-
-  // Best time window
-  const bestTimeWindow = suggestBestTime(weather, swell, timeOfDay, bestScore, siteVis);
-
-  // Key factors
-  const keyFactors = collectKeyFactors(
-    bestSite,
-    siteVis,
-    weather,
-    swell
-  );
+  const summary = generateSummary(bestSite, bestScore, siteVis, weather, swell, timeOfDay, outlook);
+  const bestTimeWindow = timeAdvicePhrase(weather, swell, timeOfDay, bestScore, siteVis);
+  const keyFactors = collectKeyFactors(bestSite, siteVis, weather, swell);
 
   return {
     go,
@@ -432,104 +651,132 @@ function generateRecommendation(
   };
 }
 
+// --- Summary: the main natural-language paragraph ---
+
 function generateSummary(
   bestSite: SiteRanking | undefined,
   bestScore: number,
-  visibility: VisibilityEstimate | null,
-  swell: SwellConditions
-): string {
-  if (!bestSite) {
-    return "Unable to generate recommendation — no sites available.";
-  }
-
-  const visStr = visibility ? `${visibility.metres}m vis` : "vis unknown";
-
-  const visBad = visibility && visibility.metres < 3;
-  const visAwful = visibility && visibility.metres < 1.5;
-
-  if (bestScore >= 8) {
-    return `Excellent conditions. ${bestSite.site.name} is firing — ${visStr}, ${swell.current.height}m ${swell.trend} swell. Get in the water.`;
-  }
-
-  if (bestScore >= 6.5) {
-    if (visAwful) {
-      return `Conditions look OK on paper but vis is trash (${visibility!.metres}m). ${bestSite.site.name} scored ${bestScore}/10 — wait for the water to clear.`;
-    }
-    if (visBad) {
-      return `Decent conditions at ${bestSite.site.name} but vis is average (${visibility!.metres}m). ${swell.current.height}m swell. Might be worth a look but don't expect much.`;
-    }
-    return `Good conditions at ${bestSite.site.name}. ${visStr}, ${swell.current.height}m swell. Worth a dive.`;
-  }
-
-  if (bestScore >= 5) {
-    const caveat = bestSite.diveScore.concerns.length > 0
-      ? ` ${bestSite.diveScore.concerns[0]}.`
-      : "";
-    if (visAwful) {
-      return `Water is dirty (${visibility!.metres}m vis) — not worth getting wet. ${bestSite.site.name} scored ${bestScore}/10.${caveat}`;
-    }
-    return `Fair conditions. ${bestSite.site.name} is your best bet at ${bestSite.diveScore.overall}/10.${caveat}`;
-  }
-
-  if (bestScore >= 3.5) {
-    return `Marginal conditions. ${bestSite.site.name} scored ${bestSite.diveScore.overall}/10 — not worth the drive unless you're desperate.`;
-  }
-
-  return `Poor conditions across all sites. ${bestSite.site.name} only scored ${bestSite.diveScore.overall}/10. Don't bother today.`;
-}
-
-function suggestBestTime(
+  vis: VisibilityEstimate | null,
   weather: WeatherConditions,
   swell: SwellConditions,
-  currentTimeOfDay: string,
-  bestScore: number,
-  visibility: VisibilityEstimate | null
+  timeOfDay: string,
+  outlook: FiveDayOutlook | null
 ): string {
-  // If conditions are genuinely bad, don't give optimistic time advice
-  const visAwful = visibility && visibility.metres < 1.5;
-  if (bestScore < 5 || visAwful) {
-    if (swell.trend === "dropping") {
-      return "Swell is dropping — vis may improve later, but don't count on it";
+  if (!bestSite) {
+    return "No sites to check right now.";
+  }
+
+  const name = shortName(bestSite.site.name);
+  const visNum = vis ? vis.metres : null;
+  const visCause = visCausePhrase(bestSite, weather, swell);
+  const forward = forwardLookPhrase(bestScore, outlook);
+  const swellWarn = swellWarningPhrase(bestSite, swell);
+
+  // --- EPIC / GREAT (8+) ---
+  if (bestScore >= 8) {
+    const windDesc = bestSite.conditionsFit.windIdeal
+      ? "light offshore winds"
+      : `${weather.observation.windSpeed}kt from the ${weather.observation.windDirection}`;
+    let text = `Banging day for it. ${name}'s the pick at ${bestScore}`;
+    if (visNum !== null && visNum >= 5) {
+      text += ` with clean water (${visNum}m vis)`;
+    } else if (visNum !== null) {
+      text += ` — vis is ${visNum}m which is workable`;
     }
-    return "Conditions aren't great right now — check back tomorrow or wait for better weather";
-  }
+    text += ` and ${windDesc}.`;
 
-  // Rising tide is generally better
-  const tideState = weather.tides.currentState;
-
-  if (tideState === "early_rising" || tideState === "mid_rising") {
-    return "Now is good — rising tide bringing clean water in";
-  }
-
-  if (weather.tides.nextHigh) {
-    const nextHighTime = new Date(weather.tides.nextHigh.time);
-    const hoursUntilHigh =
-      (nextHighTime.getTime() - Date.now()) / (1000 * 60 * 60);
-
-    if (hoursUntilHigh > 0 && hoursUntilHigh <= 4) {
-      const timeStr = nextHighTime.toLocaleTimeString("en-AU", {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-      return `Aim for the incoming tide — next high at ${timeStr}. Get in 2-3 hours before.`;
+    // Time urgency
+    if (swell.trend === "building" || (timeOfDay === "morning" || timeOfDay === "dawn")) {
+      text += " Get in early before the nor'easter kicks in around midday.";
     }
+    return text;
   }
 
-  // Swell trend
-  if (swell.trend === "dropping") {
-    return "Swell is dropping — conditions should improve through the day";
-  }
-  if (swell.trend === "building") {
-    return "Swell is building — go sooner rather than later";
+  // --- GOOD (6.5-8) ---
+  if (bestScore >= 6.5) {
+    const reason = siteContextReason(bestSite);
+    let text = `Decent day out there. ${name}'s the go because ${reason}`;
+    if (visNum !== null) {
+      if (visNum < 2) {
+        text += `, but vis is pretty rubbish at ${visNum}m${visCause}`;
+      } else if (visNum < 4) {
+        text += ` — vis is ${visNum}m${visCause}, so not amazing`;
+      } else {
+        text += ` with ${visNum}m vis`;
+      }
+    }
+    text += ".";
+
+    if (swellWarn) text += ` ${swellWarn}`;
+    if (forward) text += ` ${forward}`;
+    return text;
   }
 
-  // Default: morning is usually best
-  if (currentTimeOfDay === "dawn" || currentTimeOfDay === "morning") {
-    return "Morning session looks good — wind typically picks up in the afternoon";
+  // --- FAIR (5-6.5) ---
+  if (bestScore >= 5) {
+    const reason = siteContextReason(bestSite);
+    let text = `Pretty average today. ${name}'s your best bet at ${bestScore} — ${reason}`;
+    if (visNum !== null) {
+      if (visNum < 2) {
+        text += `, but vis is rubbish at ${visNum}m${visCause} — you're basically diving blind`;
+      } else if (visNum < 4) {
+        text += `. Vis is only ${visNum}m${visCause}`;
+      } else {
+        text += ` with ${visNum}m vis`;
+      }
+    }
+    text += ".";
+
+    if (swellWarn) text += ` ${swellWarn}`;
+    if (forward) text += ` ${forward}`;
+    return text;
   }
 
-  return "Early morning tomorrow is likely the best window";
+  // --- MARGINAL (3.5-5) ---
+  if (bestScore >= 3.5) {
+    let text: string;
+    if (visNum !== null && visNum < 2) {
+      text = `Wouldn't bother today. Vis is ${visNum}m${visCause} — can't see a thing.`;
+    } else {
+      text = `Pretty ordinary out there. ${name}'s the only option at ${bestScore} but it's not worth the drive.`;
+    }
+
+    if (swellWarn) text += ` ${swellWarn}`;
+    if (forward) {
+      text += ` ${forward}`;
+    } else {
+      text += " Save your energy.";
+    }
+    return text;
+  }
+
+  // --- POOR / SKIP IT (< 3.5) ---
+  {
+    let text = "Don't bother today.";
+
+    // Lead with the dominant problem
+    if (swell.current.height >= 1.5) {
+      text += ` ${swell.current.height}m of ${swell.current.direction} swell`;
+      if (visNum !== null && visNum < 3) {
+        text += `, vis is shot at ${visNum}m${visCause}`;
+      }
+      text += ", and it's only getting worse this arvo.";
+    } else if (visNum !== null && visNum < 2) {
+      text += ` Vis is completely cooked at ${visNum}m${visCause}.`;
+    } else {
+      text += ` ${name} only scored ${bestScore} — everything's working against you today.`;
+    }
+
+    if (forward) {
+      text += ` ${forward}`;
+    } else {
+      text += " Save your energy for when it cleans up.";
+    }
+    return text;
+  }
 }
+
+// --- Key factors (structured data for pills) ---
 
 function collectKeyFactors(
   bestSite: SiteRanking | undefined,
@@ -539,23 +786,18 @@ function collectKeyFactors(
 ): string[] {
   const factors: string[] = [];
 
-  // Vis
   factors.push(visibility ? `Vis: ${visibility.metres}m (${visibility.rating})` : "Vis: unavailable");
 
-  // Swell
   factors.push(
     `Swell: ${swell.current.height}m @ ${swell.current.period}s from ${swell.current.direction} (${swell.trend})`
   );
 
-  // Wind
   factors.push(
     `Wind: ${weather.observation.windDirection} ${weather.observation.windSpeed}kt`
   );
 
-  // Tide
   factors.push(`Tide: ${weather.tides.currentState.replace(/_/g, " ")}`);
 
-  // Rain
   if (weather.rainfall.last24h >= 5) {
     factors.push(`Rain: ${weather.rainfall.last24h}mm in last 24h`);
   } else {
@@ -566,3 +808,15 @@ function collectKeyFactors(
 
   return factors;
 }
+
+// Exported for testing only — not part of the public API
+export const _testInternals = {
+  generateRecommendation,
+  generateSummary,
+  timeAdvicePhrase,
+  forwardLookPhrase,
+  shortName,
+  siteContextReason,
+  visCausePhrase,
+  swellWarningPhrase,
+};
