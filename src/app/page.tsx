@@ -113,6 +113,7 @@ interface OutlookDay {
 interface FiveDayOutlook {
   days: OutlookDay[];
   generatedAt: string;
+  scoredSite?: string;
 }
 
 interface SiteVisibility {
@@ -457,7 +458,10 @@ function outlookRainIcon(probability: number): string {
 function FiveDayOutlookSection({ outlook }: { outlook: FiveDayOutlook }) {
   return (
     <section>
-      <SectionHeader title="5-Day Outlook" />
+      <SectionHeader
+        title="5-Day Outlook"
+        subtitle={outlook.scoredSite ? `Scored for ${outlook.scoredSite}` : undefined}
+      />
       <div className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-hide">
         {outlook.days.map((day) => (
           <div
@@ -509,10 +513,12 @@ function ForecastTimeline({
   swell,
   selectedHour,
   onSelectHour,
+  siteName,
 }: {
   swell: DiveBriefing["conditions"]["swell"];
   selectedHour: string;
   onSelectHour: (value: string) => void;
+  siteName?: string;
 }) {
   if (!swell?.forecast?.length) return null;
 
@@ -564,9 +570,14 @@ function ForecastTimeline({
   return (
     <div className="glass-card p-4 sm:p-5 overflow-hidden">
       <div className="flex items-center justify-between mb-3">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-ocean-400">
-          18-Hour Forecast
-        </p>
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-ocean-400">
+            18-Hour Forecast
+          </p>
+          {siteName && (
+            <p className="text-[9px] text-ocean-500 mt-0.5">Conditions at {siteName}</p>
+          )}
+        </div>
         <p className="text-[10px] text-ocean-500">Tap to preview</p>
       </div>
       <div className="overflow-x-auto -mx-4 sm:-mx-5 px-4 sm:px-5 scrollbar-hide">
@@ -1158,6 +1169,7 @@ export default function Dashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [forecastHour, setForecastHour] = useState<string>("now");
+  const [selectedSite, setSelectedSite] = useState<string>("all");
 
   // PWA install state
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
@@ -1211,13 +1223,18 @@ export default function Dashboard() {
     setShowInstallGuide((v) => !v);
   }, [installPrompt]);
 
-  async function fetchBriefing(isRefresh = false, hour?: string) {
+  async function fetchBriefing(isRefresh = false, hour?: string, site?: string) {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     setError(null);
     try {
       const h = hour ?? forecastHour;
-      const url = h === "now" ? "/api/briefing" : `/api/briefing?hour=${h}`;
+      const s = site ?? selectedSite;
+      const params = new URLSearchParams();
+      if (h !== "now") params.set("hour", h);
+      if (s !== "all") params.set("site", s);
+      const qs = params.toString();
+      const url = qs ? `/api/briefing?${qs}` : "/api/briefing";
       const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) throw new Error(`API error: ${res.status}`);
       const data = await res.json();
@@ -1236,7 +1253,12 @@ export default function Dashboard() {
 
   function handleHourChange(value: string) {
     setForecastHour(value);
-    fetchBriefing(true, value);
+    fetchBriefing(true, value, undefined);
+  }
+
+  function handleSiteChange(value: string) {
+    setSelectedSite(value);
+    fetchBriefing(true, undefined, value);
   }
 
   useEffect(() => {
@@ -1284,7 +1306,20 @@ export default function Dashboard() {
     <div className="space-y-8 sm:space-y-12 animate-fade-in-up">
       {/* Controls bar */}
       <div className="flex flex-col items-center gap-3">
-        <div className="flex items-center justify-center gap-3">
+        <div className="flex items-center justify-center gap-2 sm:gap-3 flex-wrap">
+          <select
+            value={selectedSite}
+            onChange={(e) => handleSiteChange(e.target.value)}
+            disabled={refreshing}
+            className="px-3 py-2 rounded-xl bg-ocean-900/60 text-white text-sm font-medium border border-white/[0.06] focus:outline-none focus:ring-2 focus:ring-teal-500/40 disabled:opacity-50 backdrop-blur-sm"
+          >
+            <option value="all">All Sites</option>
+            {SITE_COORDS.map((site) => (
+              <option key={site.id} value={site.id}>
+                {site.name}
+              </option>
+            ))}
+          </select>
           <select
             value={forecastHour}
             onChange={(e) => handleHourChange(e.target.value)}
@@ -1467,6 +1502,7 @@ export default function Dashboard() {
             swell={swell}
             selectedHour={forecastHour}
             onSelectHour={handleHourChange}
+            siteName={selectedSite !== "all" ? SITE_COORDS.find((s) => s.id === selectedSite)?.name : undefined}
           />
         </section>
       )}

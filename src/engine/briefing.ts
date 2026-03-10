@@ -115,9 +115,14 @@ function getTimeOfDay(
 export async function generateBriefing(options?: {
   hour?: number;
   sites?: DiveSite[];
+  siteId?: string;
 }): Promise<DiveBriefing> {
   const timeOfDay = getTimeOfDay(options?.hour);
   const sites = options?.sites ?? northernBeachesSites;
+  // Resolve the selected site for per-site outlook scoring
+  const selectedSite = options?.siteId
+    ? sites.find((s) => s.id === options.siteId)
+    : undefined;
 
   // Fetch all data in parallel
   const [weather, swell, sharkActivity, omData] = await Promise.all([
@@ -201,7 +206,7 @@ export async function generateBriefing(options?: {
   }
 
   // Generate 5-day outlook (needed before recommendation for forward-looking advice)
-  const outlook = generate5DayOutlook(swell, omData);
+  const outlook = generate5DayOutlook(swell, omData, selectedSite);
 
   // Generate recommendation
   const recommendation = generateRecommendation(

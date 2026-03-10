@@ -8,7 +8,7 @@
 
 import type { SwellConditions } from "../data/swell";
 import type { OpenMeteoDay } from "../data/open-meteo";
-import { northernBeachesSites } from "../sites/northern-beaches";
+import { northernBeachesSites, type DiveSite } from "../sites/northern-beaches";
 import { estimateVisibility, type VisibilityEstimate } from "./visibility";
 import { calculateDiveScore, type DiveScore } from "./dive-score";
 
@@ -38,6 +38,7 @@ export interface OutlookDay {
 export interface FiveDayOutlook {
   days: OutlookDay[];
   generatedAt: string;
+  scoredSite: string; // name of the site used for scoring
 }
 
 // --- Helpers ---
@@ -122,6 +123,7 @@ function generateSummary(
 export function generate5DayOutlook(
   wwData: SwellConditions | null,
   omData: OpenMeteoDay[] | null,
+  site?: DiveSite,
 ): FiveDayOutlook | null {
   // If both data sources are unavailable, don't produce a misleading outlook.
   // Scoring zeros as "Great 8.8" is worse than showing nothing.
@@ -152,9 +154,8 @@ export function generate5DayOutlook(
   const wwWind = wwData?.windForecast ?? [];
   const wwWeather = wwData?.weatherForecast ?? [];
 
-  // Use best site for scoring (pick the first site as default — the scorer
-  // needs a site to evaluate conditions fit)
-  const bestSite = northernBeachesSites[0]; // Bluefish Point
+  // Use the specified site for scoring, or default to first site
+  const bestSite = site ?? northernBeachesSites[0];
 
   const days: OutlookDay[] = (dates.map((date, idx) => {
     const om = omByDate.get(date);
@@ -317,5 +318,6 @@ export function generate5DayOutlook(
   return {
     days,
     generatedAt: new Date().toISOString(),
+    scoredSite: bestSite.name,
   };
 }

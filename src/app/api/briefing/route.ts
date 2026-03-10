@@ -2,20 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { generateBriefing } from "../../../engine/briefing";
 
 /**
- * GET /api/briefing?hour=7
+ * GET /api/briefing?hour=7&site=bluefish-point
  *
- * Returns a full dive briefing. Optional `hour` param (0-23)
- * overrides the current hour for time-of-day calculations.
+ * Returns a full dive briefing. Optional params:
+ * - `hour` (0-23): overrides the current hour for time-of-day calculations
+ * - `site` (site id): scores the 5-day outlook and 18-hour forecast for this specific site
  */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const hourParam = searchParams.get("hour");
+    const siteParam = searchParams.get("site");
     const hour =
       hourParam !== null ? parseInt(hourParam, 10) : undefined;
 
     const briefing = await generateBriefing({
       hour: hour !== undefined && !isNaN(hour) ? hour : undefined,
+      siteId: siteParam ?? undefined,
     });
 
     return NextResponse.json(briefing);
