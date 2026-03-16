@@ -62,11 +62,11 @@ export interface WeatherConditions {
 
 /** Manly Hydraulics / Fort Denison — closest to Northern Beaches */
 const BOM_OBSERVATIONS_URL =
-  "http://www.bom.gov.au/fwo/IDN60901/IDN60901.94768.json";
+  "https://www.bom.gov.au/fwo/IDN60901/IDN60901.94768.json";
 
 /** Sydney Airport — reliable fallback with full obs */
 const BOM_SYDNEY_AIRPORT_URL =
-  "http://www.bom.gov.au/fwo/IDN60901/IDN60901.94767.json";
+  "https://www.bom.gov.au/fwo/IDN60901/IDN60901.94767.json";
 
 // --- Helpers ---
 
@@ -280,7 +280,7 @@ export function estimateTideState(
  * Fetch tide predictions from BOM tide tables.
  *
  * BOM publishes tide tables at:
- * http://www.bom.gov.au/australia/tides/#!/nsw-sydney-fort-denison
+ * https://www.bom.gov.au/australia/tides/#!/nsw-sydney-fort-denison
  *
  * Since there's no clean JSON API, for now we provide a function
  * to manually supply tide data and also attempt to scrape if possible.
@@ -291,7 +291,7 @@ async function fetchTideData(): Promise<TideData> {
   // This endpoint isn't officially documented but sometimes works
   try {
     const res = await fetch(
-      "http://www.bom.gov.au/ntc/IDO59001/IDO59001_2026_NSW_TP011.json",
+      "https://www.bom.gov.au/ntc/IDO59001/IDO59001_2026_NSW_TP011.json",
       {
         cache: "no-store",
         headers: {

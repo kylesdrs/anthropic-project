@@ -70,7 +70,7 @@ const OPEN_METEO_MARINE_URL =
 
 // BOM wave buoy fallback — Sydney waverider buoy
 const BOM_WAVE_BUOY_URL =
-  "http://www.bom.gov.au/fwo/IDN60801/IDN60801.94768.json";
+  "https://www.bom.gov.au/fwo/IDN60801/IDN60801.94768.json";
 
 // --- Helpers ---
 
