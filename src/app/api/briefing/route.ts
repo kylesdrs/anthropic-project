@@ -16,8 +16,14 @@ export async function GET(request: NextRequest) {
     const hour =
       hourParam !== null ? parseInt(hourParam, 10) : undefined;
 
+    // Validate hour is within bounds
+    const validHour =
+      hour !== undefined && !isNaN(hour) && hour >= 0 && hour <= 23
+        ? hour
+        : undefined;
+
     const briefing = await generateBriefing({
-      hour: hour !== undefined && !isNaN(hour) ? hour : undefined,
+      hour: validHour,
       siteId: siteParam ?? undefined,
     });
 

@@ -40,30 +40,27 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
 
-    // Validate required fields
+    // Validate required fields with type checks
     const { siteId, reportedVis, diverName } = body;
-    if (!siteId || typeof reportedVis !== "number" || !diverName) {
+    if (typeof siteId !== "string" || typeof diverName !== "string" || !siteId || !diverName) {
       return NextResponse.json(
-        { error: "Missing required fields: siteId, reportedVis (number), diverName" },
+        { error: "Missing required fields: siteId (string), reportedVis (number), diverName (string)" },
         { status: 400 }
       );
     }
 
-    if (reportedVis < 0 || reportedVis > 30) {
+    if (typeof reportedVis !== "number" || isNaN(reportedVis) || reportedVis < 0 || reportedVis > 30) {
       return NextResponse.json(
-        { error: "reportedVis must be between 0 and 30 metres" },
+        { error: "reportedVis must be a number between 0 and 30 metres" },
         { status: 400 }
       );
     }
 
-    // Find the site
+    // Find the site — don't reveal valid site IDs in errors
     const site = northernBeachesSites.find((s) => s.id === siteId);
     if (!site) {
       return NextResponse.json(
-        {
-          error: `Unknown siteId: ${siteId}`,
-          validSites: northernBeachesSites.map((s) => ({ id: s.id, name: s.name })),
-        },
+        { error: "Unknown site" },
         { status: 400 }
       );
     }
@@ -86,14 +83,23 @@ export async function POST(request: NextRequest) {
       console.warn("Could not snapshot model prediction for calibration report");
     }
 
+    // Sanitise optional string fields
+    const validSources = ["diver", "abyss", "other"] as const;
+    const source = validSources.includes(body.source) ? body.source : "diver";
+    const notes = typeof body.notes === "string" ? body.notes.slice(0, 500) : "";
+    const observedAt =
+      typeof body.observedAt === "string" && !isNaN(Date.parse(body.observedAt))
+        ? body.observedAt
+        : new Date().toISOString();
+
     const report = addVisReport({
-      observedAt: body.observedAt || new Date().toISOString(),
+      observedAt,
       siteId,
       siteName: site.name,
       reportedVis,
-      diverName: String(diverName).slice(0, 50),
-      source: body.source || "diver",
-      notes: String(body.notes || "").slice(0, 500),
+      diverName: diverName.slice(0, 50),
+      source,
+      notes,
       modelPrediction,
     });
 
