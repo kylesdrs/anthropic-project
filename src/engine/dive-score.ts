@@ -176,6 +176,17 @@ function scoreConditionsFit(
   else if (swellRatio <= 1.3) score -= 1.5;
   else score -= 3;
 
+  // Swell energy penalty — long-period groundswell carries more energy
+  // than the height alone suggests. A 0.9m@15s swell creates as much
+  // surge as a 1.4m@7s swell. Penalise when energy is high relative to
+  // what the height would suggest.
+  const energy = swell.height * swell.height * swell.period;
+  if (energy >= 30) score -= 2;       // very powerful swell
+  else if (energy >= 20) score -= 1.5;
+  else if (energy >= 12) score -= 0.5; // moderate energy, noticeable surge
+  // Bonus for short-period wind chop (low energy, easier to manage)
+  else if (energy < 5 && swell.period < 8) score += 0.5;
+
   // Swell direction protected
   if (site.bestConditions.swellDirectionProtected.includes(swell.direction)) {
     score += 1.5;
@@ -243,6 +254,14 @@ function scoreSafety(
   } else if (swellRatio > 1.0) {
     score -= 1; // slightly over
   }
+
+  // Long-period swell surge penalty — even when height is under the
+  // site limit, high-energy groundswell creates dangerous surge and
+  // strong currents that height alone doesn't capture.
+  const energy = swell.height * swell.height * swell.period;
+  if (energy >= 30) score -= 1.5;
+  else if (energy >= 20) score -= 1;
+  else if (energy >= 12) score -= 0.5;
 
   // Swell direction — is the site protected?
   const swellDir = swell.direction;
@@ -395,6 +414,14 @@ function collectConcerns(input: DiveScoreInput): string[] {
   if (input.swell.height > input.site.bestConditions.swellMax) {
     concerns.push(
       `Swell ${input.swell.height}m exceeds site max ${input.site.bestConditions.swellMax}m`
+    );
+  }
+
+  // Long-period swell warning
+  const swellEnergy = input.swell.height * input.swell.height * input.swell.period;
+  if (swellEnergy >= 12 && input.swell.period >= 12) {
+    concerns.push(
+      `Long-period ${input.swell.period}s groundswell — surge stronger than ${input.swell.height}m height suggests`
     );
   }
 

@@ -159,8 +159,10 @@ export function generate5DayOutlook(
 
   const days: OutlookDay[] = (dates.map((date, idx) => {
     const om = omByDate.get(date);
-    const dateObj = new Date(date + "T00:00:00+11:00");
-    const dayName = idx === 0 ? "Today" : DAY_NAMES[dateObj.getDay()];
+    // Use noon to avoid timezone day-rollback: midnight +11:00 = previous day in UTC,
+    // which causes getDay()/getUTCDay() to return the wrong weekday.
+    const dateObj = new Date(date + "T12:00:00+11:00");
+    const dayName = idx === 0 ? "Today" : DAY_NAMES[dateObj.getUTCDay()];
 
     // Try to extract WW morning data for this date
     const wwSwellH = wwMorningAvg(

@@ -417,6 +417,10 @@ function calculateTidePhaseImpact(tides: TideData): VisibilityFactor {
       impact = -0.8;
       description = "Mid falling tide — lagoon/estuary outflow pulling dirty water across reefs";
       break;
+    default:
+      impact = 0;
+      description = `Tide state "${tides.currentState}" — neutral impact`;
+      break;
   }
 
   return { name: "Tide Phase", impact, description };
