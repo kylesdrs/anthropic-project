@@ -160,7 +160,7 @@ export function generate5DayOutlook(
   const days: OutlookDay[] = (dates.map((date, idx) => {
     const om = omByDate.get(date);
     const dateObj = new Date(date + "T00:00:00+11:00");
-    const dayName = idx === 0 ? "Today" : idx === 1 ? "Tmrw" : DAY_NAMES[dateObj.getDay()];
+    const dayName = idx === 0 ? "Today" : DAY_NAMES[dateObj.getDay()];
 
     // Try to extract WW morning data for this date
     const wwSwellH = wwMorningAvg(
