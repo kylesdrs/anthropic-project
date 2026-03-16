@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { extractSydneyHour } from "../utils/sydney-time";
 
 // --- PWA Install types ---
 
@@ -546,16 +547,13 @@ function ForecastTimeline({
     // Find closest forecast entry for this hour
     const targetLabel = `${String(h).padStart(2, "0")}:00`;
     const matchSwell = swell.forecast?.find((f) => {
-      const ts = f.timestamp.includes("T") ? f.timestamp : f.timestamp.replace(" ", "T");
-      try { return new Date(ts).getHours() === h; } catch { return false; }
+      try { return extractSydneyHour(f.timestamp) === h; } catch { return false; }
     });
     const matchWind = swell.windForecast?.find((f) => {
-      const ts = f.timestamp.includes("T") ? f.timestamp : f.timestamp.replace(" ", "T");
-      try { return new Date(ts).getHours() === h; } catch { return false; }
+      try { return extractSydneyHour(f.timestamp) === h; } catch { return false; }
     });
     const matchWeather = swell.weatherForecast?.find((f) => {
-      const ts = f.timestamp.includes("T") ? f.timestamp : f.timestamp.replace(" ", "T");
-      try { return new Date(ts).getHours() === h; } catch { return false; }
+      try { return extractSydneyHour(f.timestamp) === h; } catch { return false; }
     });
 
     slots.push({

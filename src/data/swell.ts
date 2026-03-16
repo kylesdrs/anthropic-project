@@ -12,6 +12,7 @@
  */
 
 import { cachedFetch, TTL } from "./cache";
+import { sydneyLocalToMs } from "../utils/sydney-time";
 
 // --- Types ---
 
@@ -198,14 +199,14 @@ async function fetchFromWillyweather(): Promise<SwellConditions | null> {
     if (allSwellEntries.length === 0) return null;
 
     // Find the entry closest to now (not just the first one, which may be midnight)
-    // Willyweather timestamps are in AEST (Australia/Sydney) — append timezone
-    // so they parse correctly on Vercel's UTC servers.
-    const toAEST = (dt: string) => new Date(dt.replace(" ", "T") + "+11:00").getTime();
+    // Willyweather timestamps are in Sydney local time — use dynamic offset
+    // to handle AEST (+10) vs AEDT (+11) correctly.
+    const toSydneyMs = (dt: string) => sydneyLocalToMs(dt);
     const nowMs = Date.now();
     let closestSwellIdx = 0;
     let closestSwellDiff = Infinity;
     for (let i = 0; i < allSwellEntries.length; i++) {
-      const diff = Math.abs(toAEST(allSwellEntries[i].dateTime) - nowMs);
+      const diff = Math.abs(toSydneyMs(allSwellEntries[i].dateTime) - nowMs);
       if (diff < closestSwellDiff) {
         closestSwellDiff = diff;
         closestSwellIdx = i;

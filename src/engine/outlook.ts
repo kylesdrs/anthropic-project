@@ -11,6 +11,7 @@ import type { OpenMeteoDay } from "../data/open-meteo";
 import { northernBeachesSites, type DiveSite } from "../sites/northern-beaches";
 import { estimateVisibility, type VisibilityEstimate } from "./visibility";
 import { calculateDiveScore, type DiveScore } from "./dive-score";
+import { getSydneyDayName } from "../utils/sydney-time";
 
 // --- Types ---
 
@@ -43,7 +44,6 @@ export interface FiveDayOutlook {
 
 // --- Helpers ---
 
-const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 /**
  * Extract morning (6am-10am) averages from Willyweather hourly forecast
@@ -159,10 +159,7 @@ export function generate5DayOutlook(
 
   const days: OutlookDay[] = (dates.map((date, idx) => {
     const om = omByDate.get(date);
-    // Use noon to avoid timezone day-rollback: midnight +11:00 = previous day in UTC,
-    // which causes getDay()/getUTCDay() to return the wrong weekday.
-    const dateObj = new Date(date + "T12:00:00+11:00");
-    const dayName = idx === 0 ? "Today" : DAY_NAMES[dateObj.getUTCDay()];
+    const dayName = idx === 0 ? "Today" : getSydneyDayName(date);
 
     // Try to extract WW morning data for this date
     const wwSwellH = wwMorningAvg(
@@ -236,7 +233,7 @@ export function generate5DayOutlook(
     else source = "OM";
 
     // Run through visibility estimator for scoring
-    const month = dateObj.getMonth() + 1;
+    const month = parseInt(date.substring(5, 7));
     const visEstimate: VisibilityEstimate = estimateVisibility(
       {
         rainfall: {

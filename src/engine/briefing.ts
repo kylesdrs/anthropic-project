@@ -25,6 +25,13 @@ import type { VisibilityEstimate } from "./visibility";
 import { estimateVisibility } from "./visibility";
 import { fetchOpenMeteo5Day } from "../data/open-meteo";
 import { generate5DayOutlook, type FiveDayOutlook, type OutlookDay } from "./outlook";
+import {
+  getSydneyHour,
+  getSydneyDateStr,
+  getSydneyOffsetHours,
+  getTimeOfDay,
+  sydneyLocalToMs,
+} from "../utils/sydney-time";
 
 // --- Types ---
 
@@ -60,50 +67,7 @@ export interface BriefingRecommendation {
   keyFactors: string[];
 }
 
-// --- Sydney timezone helpers ---
-
-/** Get the current hour in Australia/Sydney timezone (handles AEST/AEDT automatically). */
-function getSydneyHour(): number {
-  const sydneyTime = new Date(
-    new Date().toLocaleString("en-US", { timeZone: "Australia/Sydney" })
-  );
-  return sydneyTime.getHours();
-}
-
-/** Get today's date string (YYYY-MM-DD) in Sydney timezone. */
-function getSydneyDateStr(): string {
-  const sydneyTime = new Date(
-    new Date().toLocaleString("en-US", { timeZone: "Australia/Sydney" })
-  );
-  return sydneyTime.toISOString().slice(0, 10);
-}
-
-/**
- * Get the Sydney UTC offset in hours for the current moment.
- * Returns +11 during AEDT (Oct–Apr) or +10 during AEST (Apr–Oct).
- */
-function getSydneyOffsetHours(): number {
-  const now = new Date();
-  const utcStr = now.toLocaleString("en-US", { timeZone: "UTC" });
-  const sydStr = now.toLocaleString("en-US", { timeZone: "Australia/Sydney" });
-  const diffMs = new Date(sydStr).getTime() - new Date(utcStr).getTime();
-  return Math.round(diffMs / (60 * 60 * 1000));
-}
-
-// --- Time of day helper ---
-
-function getTimeOfDay(
-  hour?: number
-): "night" | "dawn" | "morning" | "midday" | "afternoon" | "dusk" {
-  const h = hour ?? getSydneyHour();
-  if (h < 5) return "night";     // 0-4: pitch dark
-  if (h < 6) return "dawn";      // 5: pre-sunrise twilight
-  if (h < 10) return "morning";  // 6-9: good daylight
-  if (h < 14) return "midday";   // 10-13: peak daylight
-  if (h < 17) return "afternoon"; // 14-16: good daylight
-  if (h < 19) return "dusk";     // 17-18: sunset / fading light
-  return "night";                 // 19-23: dark
-}
+// Timezone helpers imported from ../utils/sydney-time
 
 // --- Main generator ---
 
@@ -262,18 +226,7 @@ export async function generateBriefing(options?: {
 
 // --- Forecast hour helper ---
 
-/**
- * Convert a Willyweather Sydney-local timestamp to milliseconds.
- * Handles both "2026-02-12 14:00:00" and ISO formats.
- * Dynamically detects AEST (+10) vs AEDT (+11) based on current DST.
- */
-function toSydneyMs(ts: string): number {
-  const offset = getSydneyOffsetHours();
-  const sign = offset >= 0 ? "+" : "-";
-  const abs = Math.abs(offset);
-  const tz = `${sign}${String(abs).padStart(2, "0")}:00`;
-  return new Date(ts.replace(" ", "T") + tz).getTime();
-}
+// toSydneyMs is now sydneyLocalToMs from ../utils/sydney-time
 
 /**
  * Build the Sydney target timestamp for a given hour today.
@@ -281,7 +234,7 @@ function toSydneyMs(ts: string): number {
 function buildTargetMs(targetHour: number): number {
   const todayStr = getSydneyDateStr();
   const targetStr = `${todayStr} ${String(targetHour).padStart(2, "0")}:00:00`;
-  return toSydneyMs(targetStr);
+  return sydneyLocalToMs(targetStr);
 }
 
 /**
@@ -304,7 +257,7 @@ function interpolateSwellForHour(
   let afterMs = Infinity;
 
   for (const entry of entries) {
-    const entryMs = toSydneyMs(entry.timestamp);
+    const entryMs = sydneyLocalToMs(entry.timestamp);
     if (entryMs <= targetMs && entryMs > beforeMs) {
       before = entry;
       beforeMs = entryMs;
@@ -349,7 +302,7 @@ function interpolateWindForHour(
   let afterMs = Infinity;
 
   for (const entry of entries) {
-    const entryMs = toSydneyMs(entry.timestamp);
+    const entryMs = sydneyLocalToMs(entry.timestamp);
     if (entryMs <= targetMs && entryMs > beforeMs) {
       before = entry;
       beforeMs = entryMs;

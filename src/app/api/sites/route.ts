@@ -4,6 +4,7 @@ import { fetchWeatherData } from "../../../data/bom";
 import { fetchSwellData } from "../../../data/swell";
 import { fetchSharkActivity } from "../../../data/sharksmart";
 import { rankSites } from "../../../engine/site-rank";
+import { getTimeOfDay } from "../../../utils/sydney-time";
 
 /**
  * GET /api/sites
@@ -29,16 +30,8 @@ export async function GET() {
       });
     }
 
-    // Determine current time of day
-    const hour = new Date().getHours();
-    let timeOfDay: "night" | "dawn" | "morning" | "midday" | "afternoon" | "dusk";
-    if (hour < 5) timeOfDay = "night";
-    else if (hour < 6) timeOfDay = "dawn";
-    else if (hour < 10) timeOfDay = "morning";
-    else if (hour < 14) timeOfDay = "midday";
-    else if (hour < 17) timeOfDay = "afternoon";
-    else if (hour < 19) timeOfDay = "dusk";
-    else timeOfDay = "night";
+    // Determine current time of day in Sydney timezone
+    const timeOfDay = getTimeOfDay();
 
     const hasRealSharkData = sharkActivity.source === "live" || sharkActivity.source === "local";
     const rankings = rankSites(northernBeachesSites, {
