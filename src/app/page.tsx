@@ -1008,7 +1008,7 @@ function VisReportSection({ siteRankings }: { siteRankings: SiteRanking[] }) {
         return;
       }
 
-      setMessage({ type: "success", text: data.comparison || "Report submitted!" });
+      setMessage({ type: "success", text: data.message || "Report submitted!" });
       setForm((f) => ({ ...f, reportedVis: "", notes: "" }));
 
       // Refresh reports
