@@ -147,6 +147,12 @@ function parseBomObservation(raw: unknown): WeatherObservation {
 /**
  * Estimate rainfall over the last 24/48/72 hours from BOM observation history.
  * BOM half-hourly obs go back ~72 hours in the JSON feed.
+ *
+ * BOM rain_trace is cumulative since 9am and resets each morning.
+ * Data is sorted newest-first, so we reverse to iterate chronologically.
+ * The increment between consecutive readings is the period rainfall;
+ * when rain_trace drops (9am reset), the new value is the first
+ * accumulation of the new period.
  */
 function parseRainfall(raw: unknown): RainfallData {
   const data = (raw as { observations: { data: Record<string, unknown>[] } })
@@ -158,27 +164,40 @@ function parseRainfall(raw: unknown): RainfallData {
   let last72h = 0;
   let lastSignificantRainTs: number | null = null;
 
-  // BOM "rain_trace" is cumulative since 9am — we need to track resets
-  // Instead, use the rainfall_since_9am and work with daily rain values.
-  // For simplicity, we sum "rain_trace" where it represents period rainfall.
-  let prevRainTrace = 0;
-
+  // Parse all observations into typed objects first
+  interface RainObs {
+    time: number;
+    rainTrace: number;
+  }
+  const parsed: RainObs[] = [];
   for (const obs of data) {
     const timeStr = obs.local_date_time_full as string;
     if (!timeStr) continue;
 
-    // Parse BOM time format: "20260211143000" -> Date
     const year = parseInt(timeStr.slice(0, 4));
     const month = parseInt(timeStr.slice(4, 6)) - 1;
     const day = parseInt(timeStr.slice(6, 8));
     const hour = parseInt(timeStr.slice(8, 10));
     const min = parseInt(timeStr.slice(10, 12));
     const obsTime = new Date(year, month, day, hour, min).getTime();
-    const hoursAgo = (now - obsTime) / (1000 * 60 * 60);
-
     const rainTrace = parseFloat(obs.rain_trace as string) || 0;
 
-    // Detect rain_trace reset (new day 9am) — it goes back to 0
+    parsed.push({ time: obsTime, rainTrace });
+  }
+
+  // Reverse to chronological order (oldest-first) so we can correctly
+  // detect the incremental rainfall between consecutive readings.
+  parsed.reverse();
+
+  let prevRainTrace = 0;
+
+  for (const obs of parsed) {
+    const hoursAgo = (now - obs.time) / (1000 * 60 * 60);
+    const rainTrace = obs.rainTrace;
+
+    // When rain_trace drops, a 9am reset occurred. The new value is
+    // the first accumulation of the new period. When it rises (or stays),
+    // the increment is the period rainfall.
     const periodRain = rainTrace < prevRainTrace ? rainTrace : rainTrace - prevRainTrace;
     prevRainTrace = rainTrace;
 
@@ -187,9 +206,9 @@ function parseRainfall(raw: unknown): RainfallData {
       if (hoursAgo <= 48) last48h += periodRain;
       if (hoursAgo <= 72) last72h += periodRain;
 
-      // Track last significant rain day (>10mm cumulated in a rolling 24h)
+      // Track last significant rain (>2mm in a single period reading)
       if (periodRain > 2) {
-        lastSignificantRainTs = obsTime;
+        lastSignificantRainTs = obs.time;
       }
     }
   }
