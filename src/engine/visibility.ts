@@ -75,6 +75,10 @@ export function estimateVisibility(
   const turbidity = calculateTurbidity(input.rainfall, input.swell, site);
   factors.push(turbidity);
 
+  // --- 2b. Swell-driven turbidity (regional, independent of rain) ---
+  const swellTurbidity = calculateSwellTurbidity(input.swell, input.swellTrend);
+  factors.push(swellTurbidity);
+
   // --- 3. Swell energy (height² × period), not just height ---
   const swellImpact = calculateSwellEnergy(input.swell, input.swellTrend, site);
   factors.push(swellImpact);
@@ -251,17 +255,33 @@ function calculateTurbidity(
   let description: string;
 
   if (rawTurbidity < 0.5) {
-    // Very dry — bonus for clean water
+    // Very dry — bonus for clean water, BUT suppressed when swell
+    // is re-suspending sediment. Dry weather doesn't help if the
+    // swell is churning the bottom — the water stays dirty regardless.
+    // Calibrated: energy ≥10 negates dry bonus entirely, 5-10 halves it.
     const dryDays = rainfall.daysSinceSignificantRain;
+    let swellSuppression = 1.0;
+    if (swellEnergy >= 10) {
+      swellSuppression = 0; // swell keeping water dirty despite dry weather
+    } else if (swellEnergy >= 5) {
+      swellSuppression = 0.5;
+    }
+
     if (dryDays >= 7) {
-      impact = 2;
-      description = `${dryDays} days dry — water well cleared`;
+      impact = 2 * swellSuppression;
+      description = swellSuppression < 1
+        ? `${dryDays} days dry but swell keeping water turbid`
+        : `${dryDays} days dry — water well cleared`;
     } else if (dryDays >= 5) {
-      impact = 1.5;
-      description = `${dryDays} days since significant rain — water has cleared`;
+      impact = 1.5 * swellSuppression;
+      description = swellSuppression < 1
+        ? `${dryDays} days dry but swell preventing full clearing`
+        : `${dryDays} days since significant rain — water has cleared`;
     } else if (dryDays >= 3) {
-      impact = 0.5;
-      description = `${dryDays} days since rain — still clearing`;
+      impact = 0.5 * swellSuppression;
+      description = swellSuppression < 1
+        ? `${dryDays} days since rain — swell slowing clearing`
+        : `${dryDays} days since rain — still clearing`;
     } else {
       impact = 0;
       description = "No significant recent rainfall";
@@ -298,6 +318,67 @@ function calculateTurbidity(
   }
 
   return { name: "Rain Turbidity", impact, description };
+}
+
+// --- 2b. Swell-driven turbidity (regional) ---
+
+/**
+ * Persistent swell-driven turbidity — independent of rain.
+ *
+ * Even when a site is sheltered from direct swell, sustained swell
+ * re-suspends sediment across the entire coastal zone. This is a
+ * REGIONAL effect: it uses raw swell energy without site exposure
+ * reduction. The swellTrend acts as a proxy for persistence:
+ * "holding"/"building" = energy has been sustained for days → full
+ * turbidity; "dropping" = dissipating → reduced effect.
+ *
+ * Calibrated against Abyss data: 4 consecutive weeks of 2-5m vis
+ * despite dry weather when swell energy stayed 12-15 (Mar 2026).
+ */
+function calculateSwellTurbidity(
+  swell: SwellReading,
+  trend: VisibilityInput["swellTrend"]
+): VisibilityFactor {
+  const energy = swell.height * swell.height * swell.period;
+
+  // Trend multiplier: sustained swell = more accumulated turbidity
+  let trendMultiplier = 1.0;
+  if (trend === "building") trendMultiplier = 1.3;
+  else if (trend === "holding") trendMultiplier = 1.0;
+  else if (trend === "dropping") trendMultiplier = 0.5;
+
+  const effectiveEnergy = energy * trendMultiplier;
+
+  let impact: number;
+  let description: string;
+
+  if (effectiveEnergy < 5) {
+    impact = 0;
+    description = "Low swell energy — no persistent coastal turbidity";
+  } else if (effectiveEnergy < 8) {
+    impact = -0.5;
+    description = `Moderate swell energy (${Math.round(energy)}) stirring coastal sediment`;
+  } else if (effectiveEnergy < 15) {
+    impact = -2.5;
+    description = `Sustained swell energy (${Math.round(energy)}) keeping coastal water turbid`;
+  } else if (effectiveEnergy < 25) {
+    impact = -3;
+    description = `High swell energy (${Math.round(energy)}) — persistent coastal turbidity`;
+  } else {
+    impact = -3.5;
+    description = `Very high swell energy (${Math.round(energy)}) — coastal water heavily churned`;
+  }
+
+  // Trend context
+  if (trend === "building" && impact < 0) {
+    description += ". Swell building — turbidity worsening";
+  } else if (trend === "holding" && impact < 0) {
+    description += ". Swell holding — no sign of clearing";
+  } else if (trend === "dropping" && impact < 0) {
+    description += ". Swell dropping — should start clearing";
+  }
+
+  return { name: "Swell Turbidity", impact, description };
 }
 
 // --- 3. Swell energy ---
@@ -342,9 +423,12 @@ function calculateSwellEnergy(
   // Energy thresholds (height² × period × exposure):
   //   <3  = negligible (calm)
   //   3-8 = minor
-  //   8-20 = moderate
-  //   20-50 = significant
+  //   8-14 = moderate (split from old 8-20 — steeper penalties)
+  //   14-30 = strong
+  //   30-50 = significant
   //   50+ = severe
+  // Calibrated Mar 2026: 0.9m@15.4s (energy 12.5) and 1.4m@7.7s (energy 15.1)
+  // should produce similar moderate-to-strong impact.
   let impact: number;
   let description: string;
 
@@ -354,15 +438,18 @@ function calculateSwellEnergy(
   } else if (effectiveEnergy < 8) {
     impact = -0.5;
     description = `Light ${height}m ${swellType} (${period}s, energy ${Math.round(energy)})${exposureNote}`;
-  } else if (effectiveEnergy < 20) {
+  } else if (effectiveEnergy < 14) {
     impact = -1.5;
     description = `Moderate ${height}m ${swellType} (${period}s, energy ${Math.round(energy)})${exposureNote}`;
-  } else if (effectiveEnergy < 50) {
+  } else if (effectiveEnergy < 30) {
     impact = -2.5;
     description = `Strong ${height}m ${swellType} (${period}s, energy ${Math.round(energy)}) — significant bottom disturbance${exposureNote}`;
+  } else if (effectiveEnergy < 50) {
+    impact = -3.5;
+    description = `Heavy ${height}m ${swellType} (${period}s, energy ${Math.round(energy)}) — severe bottom disturbance${exposureNote}`;
   } else {
     impact = -4;
-    description = `Heavy ${height}m ${swellType} (${period}s, energy ${Math.round(energy)}) — severe turbidity${exposureNote}`;
+    description = `Extreme ${height}m ${swellType} (${period}s, energy ${Math.round(energy)}) — severe turbidity${exposureNote}`;
   }
 
   // Trend modifier
@@ -514,9 +601,9 @@ function calculateSSTImpact(sst: number | null): VisibilityFactor {
   if (sst >= 23) {
     impact = 1.5;
     description = `Warm SST ${sst}°C — EAC influence likely, clearer blue water`;
-  } else if (sst >= 21) {
+  } else if (sst >= 22) {
     impact = 0.5;
-    description = `SST ${sst}°C — moderate water clarity`;
+    description = `SST ${sst}°C — warm, moderate water clarity`;
   } else if (sst < 18) {
     impact = -0.5;
     description = `Cool SST ${sst}°C — cooler water often carries more plankton`;
