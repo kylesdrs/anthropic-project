@@ -194,7 +194,7 @@ export async function generateBriefing(options?: {
     : visibility;
 
   // Generate 5-day outlook (needed before recommendation for forward-looking advice)
-  const outlook = generate5DayOutlook(swell, omData, selectedSite);
+  const outlook = generate5DayOutlook(swell, omData, selectedSite, weather?.rainfall);
 
   // Generate recommendation
   const recommendation = generateRecommendation(

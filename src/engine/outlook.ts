@@ -8,6 +8,7 @@
 
 import type { SwellConditions } from "../data/swell";
 import type { OpenMeteoDay } from "../data/open-meteo";
+import type { RainfallData } from "../data/bom";
 import { northernBeachesSites, type DiveSite } from "../sites/northern-beaches";
 import { estimateVisibility, type VisibilityEstimate } from "./visibility";
 import { calculateDiveScore, type DiveScore } from "./dive-score";
@@ -124,6 +125,7 @@ export function generate5DayOutlook(
   wwData: SwellConditions | null,
   omData: OpenMeteoDay[] | null,
   site?: DiveSite,
+  currentRainfall?: RainfallData,
 ): FiveDayOutlook | null {
   // If both data sources are unavailable, don't produce a misleading outlook.
   // Scoring zeros as "Great 8.8" is worse than showing nothing.
@@ -157,44 +159,50 @@ export function generate5DayOutlook(
   // Use the specified site for scoring, or default to first site
   const bestSite = site ?? northernBeachesSites[0];
 
-  const days: OutlookDay[] = (dates.map((date, idx) => {
+  // --- First pass: extract per-day conditions ---
+  interface DayConditions {
+    date: string;
+    dayName: string;
+    hasWW: boolean;
+    hasOM: boolean;
+    swell: { height: number; period: number; direction: string; directionDeg: number };
+    wind: { speed: number; gust: number; direction: string; directionDeg: number };
+    rainProbability: number;
+    precis: string;
+    cloudCover: number;
+    source: OutlookDay["source"];
+    waterTemp: number | null;
+  }
+
+  const dayConditions: (DayConditions | null)[] = dates.map((date, idx) => {
     const om = omByDate.get(date);
     const dayName = idx === 0 ? "Today" : getSydneyDayName(date);
 
-    // Try to extract WW morning data for this date
     const wwSwellH = wwMorningAvg(
       wwSwell.map((e) => ({ dateTime: e.timestamp, height: e.height })),
-      date,
-      "height"
+      date, "height"
     );
     const wwSwellP = wwMorningAvg(
       wwSwell.map((e) => ({ dateTime: e.timestamp, period: e.period })),
-      date,
-      "period"
+      date, "period"
     );
     const wwSwellDir = wwMorningDir(
       wwSwell.map((e) => ({
-        dateTime: e.timestamp,
-        directionText: e.direction,
-        direction: e.directionDeg,
+        dateTime: e.timestamp, directionText: e.direction, direction: e.directionDeg,
       })),
       date
     );
     const wwWindS = wwMorningAvg(
       wwWind.map((e) => ({ dateTime: e.timestamp, speed: e.speed })),
-      date,
-      "speed"
+      date, "speed"
     );
     const wwWindDir = wwMorningDir(
       wwWind.map((e) => ({
-        dateTime: e.timestamp,
-        directionText: e.direction,
-        direction: e.directionDeg,
+        dateTime: e.timestamp, directionText: e.direction, direction: e.directionDeg,
       })),
       date
     );
 
-    // Find WW rain probability for this date
     const wwRainEntries = wwWeather.filter((e) => e.timestamp.startsWith(date));
     const wwRain = wwRainEntries.length > 0
       ? Math.max(...wwRainEntries.map((e) => e.rainProbability ?? 0))
@@ -203,11 +211,8 @@ export function generate5DayOutlook(
 
     const hasWW = wwSwellH !== null;
     const hasOM = om !== null;
-
-    // Skip days where neither source has data — don't score zeros as good conditions
     if (!hasWW && !hasOM) return null;
 
-    // Merge: prefer WW for swell (days 1-3), OM for wind/rain supplement, OM-only for days 4-5
     const swell = {
       height: wwSwellH ?? om?.swell.height ?? 0,
       period: Math.round(wwSwellP ?? om?.swell.period ?? 0),
@@ -217,7 +222,7 @@ export function generate5DayOutlook(
 
     const wind = {
       speed: Math.round(wwWindS ?? om?.wind.speed ?? 0),
-      gust: Math.round((wwWindS ?? om?.wind.speed ?? 0) * 1.4), // estimate gusts
+      gust: Math.round((wwWindS ?? om?.wind.speed ?? 0) * 1.4),
       direction: wwWindDir?.text ?? om?.wind.direction ?? "W",
       directionDeg: wwWindDir?.deg ?? om?.wind.directionDeg ?? 270,
     };
@@ -226,22 +231,91 @@ export function generate5DayOutlook(
     const precis = wwPrecis ?? om?.precis ?? "Unknown";
     const cloudCover = om?.cloudCover ?? (precis.toLowerCase().includes("overcast") ? 80 : 30);
 
-    // Determine source
     let source: OutlookDay["source"];
     if (hasWW && hasOM) source = "WW+OM";
     else if (hasWW) source = "WW";
     else source = "OM";
 
-    // Run through visibility estimator for scoring
+    return {
+      date, dayName, hasWW, hasOM, swell, wind,
+      rainProbability, precis, cloudCover, source,
+      waterTemp: om?.waterTemp ?? null,
+    };
+  });
+
+  // --- Build multi-day rainfall context ---
+  // Convert rain probability to estimated mm: >50% ≈ 8mm, >30% ≈ 3mm, else 0.
+  // Carry forward across days so day N's last48h includes day N-1's rain.
+  const dailyRainMm: number[] = dayConditions.map((dc) => {
+    if (!dc) return 0;
+    const p = dc.rainProbability;
+    return p > 50 ? 8 : p > 30 ? 3 : 0;
+  });
+
+  function buildRainfallForDay(idx: number): RainfallData {
+    // Day 0 (today): use real BOM rainfall if available
+    if (idx === 0 && currentRainfall) {
+      return currentRainfall;
+    }
+
+    const last24h = dailyRainMm[idx] ?? 0;
+    const last48h = last24h + (dailyRainMm[idx - 1] ?? 0);
+    const last72h = last48h + (dailyRainMm[idx - 2] ?? 0);
+
+    // Walk backwards to find last significant rain day
+    let daysSinceSignificantRain = 7;
+    for (let d = idx; d >= Math.max(0, idx - 4); d--) {
+      if (dailyRainMm[d] >= 8) {
+        daysSinceSignificantRain = idx - d;
+        break;
+      }
+    }
+    // If today has real data showing recent rain, factor it in for near-future days
+    if (currentRainfall && daysSinceSignificantRain > idx) {
+      daysSinceSignificantRain = Math.min(
+        daysSinceSignificantRain,
+        currentRainfall.daysSinceSignificantRain + idx
+      );
+    }
+
+    return { last24h, last48h, last72h, daysSinceSignificantRain };
+  }
+
+  // --- Infer swell trend from day-to-day height changes ---
+  function inferSwellTrend(idx: number): "building" | "holding" | "dropping" | undefined {
+    const cur = dayConditions[idx]?.swell.height;
+    if (cur == null) return undefined;
+    const prev = dayConditions[idx - 1]?.swell.height;
+    const next = dayConditions[idx + 1]?.swell.height;
+
+    if (prev != null && next != null) {
+      if (cur > prev + 0.2 || next > cur + 0.2) return "building";
+      if (cur < prev - 0.2 || next < cur - 0.2) return "dropping";
+      return "holding";
+    }
+    if (prev != null) {
+      if (cur > prev + 0.2) return "building";
+      if (cur < prev - 0.2) return "dropping";
+      return "holding";
+    }
+    // Day 0 with real swell data: use the live trend if available
+    if (idx === 0 && wwData?.trend) return wwData.trend;
+    return undefined;
+  }
+
+  // --- Second pass: score each day ---
+  const days: OutlookDay[] = (dayConditions.map((dc, idx) => {
+    if (!dc) return null;
+
+    const { date, dayName, swell, wind, rainProbability, precis, cloudCover, source, waterTemp } = dc;
+    const rainfall = buildRainfallForDay(idx);
+    const swellTrend = inferSwellTrend(idx);
     const month = parseInt(date.substring(5, 7));
+    const cloudDesc = cloudCover >= 80 ? "Overcast" : cloudCover >= 50 ? "Cloudy" : "Partly cloudy";
+
     const visEstimate: VisibilityEstimate = estimateVisibility(
       {
-        rainfall: {
-          last24h: rainProbability > 50 ? 8 : rainProbability > 30 ? 3 : 0,
-          last48h: 0,
-          last72h: 0,
-          daysSinceSignificantRain: rainProbability > 50 ? 0 : 3,
-        },
+        rainfall,
         swell: {
           timestamp: date,
           height: swell.height,
@@ -249,23 +323,23 @@ export function generate5DayOutlook(
           direction: swell.direction,
           directionDeg: swell.directionDeg,
         },
+        swellTrend,
         windDirection: wind.direction,
         windSpeed: wind.speed,
         windGust: wind.gust,
         tides: {
           predictions: [],
-          currentState: "mid_rising" as const, // Assume average-case tide for outlook
+          currentState: "mid_rising" as const,
           nextHigh: null,
           nextLow: null,
         },
         month,
-        seaSurfaceTemp: om?.waterTemp ?? null,
-        cloud: cloudCover >= 80 ? "Overcast" : cloudCover >= 50 ? "Cloudy" : "Partly cloudy",
+        seaSurfaceTemp: waterTemp,
+        cloud: cloudDesc,
       },
       bestSite
     );
 
-    // Calculate dive score
     const diveScore: DiveScore = calculateDiveScore({
       visibility: visEstimate,
       sharkRisk: null,
@@ -279,11 +353,11 @@ export function generate5DayOutlook(
       windSpeed: wind.speed,
       windGust: wind.gust,
       windDirection: wind.direction,
-      airTemp: 22, // Reasonable Sydney default
-      waterTemp: om?.waterTemp ?? null,
+      airTemp: 22,
+      waterTemp,
       site: bestSite,
       timeOfDay: "morning",
-      cloud: cloudCover >= 80 ? "Overcast" : cloudCover >= 50 ? "Cloudy" : "Partly cloudy",
+      cloud: cloudDesc,
       tideState: "mid_rising",
     });
 
