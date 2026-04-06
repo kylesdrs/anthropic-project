@@ -365,13 +365,18 @@ function generateScoreExplanation(
 
   // Rain context (if significant)
   const rain = input.weather.rainfall;
+  const swellEnergy = swell.height * swell.height * swell.period;
   if (rain.last24h >= 10) {
     parts.push(
       `Note: ${rain.last24h}mm of rain in the last 24 hours means runoff will be affecting water quality.`
     );
-  } else if (rain.daysSinceSignificantRain >= 5) {
+  } else if (rain.daysSinceSignificantRain >= 5 && swellEnergy < 10) {
     parts.push(
       `${rain.daysSinceSignificantRain} days since significant rain is helping water clarity.`
+    );
+  } else if (rain.daysSinceSignificantRain >= 5 && swellEnergy >= 10) {
+    parts.push(
+      `${rain.daysSinceSignificantRain} days dry, but the swell is keeping coastal water turbid regardless.`
     );
   }
 

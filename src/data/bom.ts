@@ -371,12 +371,12 @@ function generateApproximateTides(): TidePoint[] {
 
     points.push({
       time: new Date(highMs).toISOString(),
-      height: 1.5 + Math.sin(i * 0.3) * 0.2, // vary slightly
+      height: Math.round((1.5 + Math.sin(i * 0.3) * 0.2) * 100) / 100,
       type: "high",
     });
     points.push({
       time: new Date(lowMs).toISOString(),
-      height: 0.4 + Math.sin(i * 0.3) * 0.1,
+      height: Math.round((0.4 + Math.sin(i * 0.3) * 0.1) * 100) / 100,
       type: "low",
     });
   }

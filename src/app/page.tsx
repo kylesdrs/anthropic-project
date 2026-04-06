@@ -229,10 +229,16 @@ function formatTime(iso: string): string {
     return new Date(iso).toLocaleTimeString("en-AU", {
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: "Australia/Sydney",
     });
   } catch {
     return "—";
   }
+}
+
+/** Round tide height for display (BOM gives 2dp, generated fallback can be noisy). */
+function formatTideHeight(height: number): string {
+  return height.toFixed(2);
 }
 
 function heroGlow(score: number): string {
@@ -495,6 +501,11 @@ function FiveDayOutlookSection({ outlook }: { outlook: FiveDayOutlook }) {
               {day.swell.height}m {day.swell.direction}
             </div>
 
+            {/* Wind */}
+            <div className={`text-[11px] mb-1 ${windColor(day.wind.speed)}`}>
+              {day.wind.speed}kt {day.wind.direction}
+            </div>
+
             {/* Rain */}
             <div className="text-[11px] text-ocean-400 mb-2">
               {outlookRainIcon(day.rainProbability)} {day.rainProbability}%
@@ -545,7 +556,6 @@ function ForecastTimeline({
     const isTomorrow = sydneyHour + offset >= 24;
 
     // Find closest forecast entry for this hour
-    const targetLabel = `${String(h).padStart(2, "0")}:00`;
     const matchSwell = swell.forecast?.find((f) => {
       try { return extractSydneyHour(f.timestamp) === h; } catch { return false; }
     });
@@ -786,11 +796,11 @@ function SiteCard({
               <div className="rounded-xl bg-ocean-950/50 border border-white/[0.03] p-3">
                 <p className="text-[10px] text-ocean-500 mb-1">Tide</p>
                 <p className="text-sm font-semibold text-white">
-                  {weather ? weather.tides.currentState.replace("_", " ") : "—"}
+                  {weather ? weather.tides.currentState.replace(/_/g, " ") : "—"}
                 </p>
                 <p className="text-[10px] text-ocean-500 mt-0.5">
                   {weather?.tides.nextHigh
-                    ? `High ${formatTime(weather.tides.nextHigh.time)} (${weather.tides.nextHigh.height}m)`
+                    ? `High ${formatTime(weather.tides.nextHigh.time)} (${formatTideHeight(weather.tides.nextHigh.height)}m)`
                     : "—"}
                 </p>
                 {conditionsFit.tideGood ? (
@@ -1481,10 +1491,10 @@ export default function Dashboard() {
           <ConditionCard
             icon="^"
             label="Tide"
-            value={weather ? weather.tides.currentState.replace("_", " ") : "—"}
+            value={weather ? weather.tides.currentState.replace(/_/g, " ") : "—"}
             sub={
               weather?.tides.nextHigh
-                ? `High ${formatTime(weather.tides.nextHigh.time)} (${weather.tides.nextHigh.height}m)`
+                ? `High ${formatTime(weather.tides.nextHigh.time)} (${formatTideHeight(weather.tides.nextHigh.height)}m)`
                 : "—"
             }
           />
