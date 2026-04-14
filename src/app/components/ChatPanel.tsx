@@ -17,6 +17,7 @@ interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   timestamp: number; // Date.now()
+  status?: string; // transient status (e.g. "Checking the web…")
 }
 
 /* ------------------------------------------------------------------ */
@@ -248,6 +249,18 @@ export default function ChatPanel() {
             try {
               const parsed = JSON.parse(payload);
               if (parsed.error) throw new Error(parsed.error);
+              if (parsed.status) {
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  updated[updated.length - 1] = {
+                    role: "assistant",
+                    content: assistantText,
+                    timestamp: assistantTs,
+                    status: parsed.status,
+                  };
+                  return updated;
+                });
+              }
               if (parsed.text) {
                 assistantText += parsed.text;
                 setMessages((prev) => {
@@ -256,6 +269,8 @@ export default function ChatPanel() {
                     role: "assistant",
                     content: assistantText,
                     timestamp: assistantTs,
+                    // clear status once text starts streaming
+                    status: undefined,
                   };
                   return updated;
                 });
@@ -457,7 +472,15 @@ export default function ChatPanel() {
                   {msg.content}
                   {msg.role === "assistant" &&
                     !msg.content &&
-                    isStreaming && <PulsingDots />}
+                    isStreaming &&
+                    (msg.status ? (
+                      <span className="inline-flex items-center gap-2 text-ocean-300 italic">
+                        <PulsingDots />
+                        <span>{msg.status}</span>
+                      </span>
+                    ) : (
+                      <PulsingDots />
+                    ))}
                 </div>
                 <span className="text-[11px] text-ocean-500/60 mt-1 px-1">
                   {relativeTime(msg.timestamp)}

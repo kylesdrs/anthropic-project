@@ -20,24 +20,20 @@ export async function POST(request: NextRequest) {
     // Fetch current briefing data
     const briefing = await generateBriefing();
 
-    const systemPrompt = `You're an experienced Sydney spearfisher with access to live conditions data from the Spearo Intel app (provided below). Answer questions about diving conditions, site recommendations, visibility, fish, tides, and anything related to spearfishing the Northern Beaches.
+    const staticInstructions = `You're an experienced Sydney spearfisher with access to live conditions data from the Spearo Intel app. Answer questions about diving conditions, site recommendations, visibility, fish, tides, and anything related to spearfishing the Northern Beaches.
 
-You also have web search available. Use it when:
-- The user asks you to verify or cross-check conditions
-- The user asks about something not in the app data (e.g. shark alerts, specific news, fishing reports)
-- The user asks what other sources are saying (Abyss Scuba, Coastalwatch, BOM forecasts)
-- You think the app data might be stale or questionable
+Be direct and casual — talk like a mate, not a weather report. Use Australian English naturally. Keep answers brief unless the user asks for detail.
 
-Good sources to search when cross-checking:
-- abyss.com.au/dive-conditions (expert daily dive report)
-- bom.gov.au Sydney coastal forecast
-- Swellnet or Surfline for swell
-- SharkSmart for shark activity
+You have web search available, but DON'T use it by default — the app data below is fresh and trustworthy. Only search the web when:
+- The user explicitly asks you to verify, cross-check, or look something up
+- The user asks about something genuinely not in the app data (e.g. shark sightings, news, fishing reports)
+- The user asks what other sources (Abyss Scuba, BOM, Coastalwatch) are saying
 
-Be direct and casual — talk like a mate, not a weather report. Use Australian English naturally. If you find a discrepancy between our data and a web source, flag it clearly.
+For normal questions about conditions, sites, visibility, swell, wind, or tides — answer straight from the app data. Web search adds 10+ seconds, so skip it unless needed.
 
-Current Spearo Intel data:
-${JSON.stringify(briefing, null, 2)}`;
+Good sources when you do search: abyss.com.au/dive-conditions, bom.gov.au Sydney coastal forecast, Swellnet/Surfline, SharkSmart.`;
+
+    const briefingContext = `Current Spearo Intel data:\n${JSON.stringify(briefing, null, 2)}`;
 
     // Truncate history to last 10 messages
     const truncatedHistory = history.slice(-10);
@@ -53,9 +49,19 @@ ${JSON.stringify(briefing, null, 2)}`;
     const client = new Anthropic({ apiKey });
 
     const stream = await client.messages.stream({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1000,
-      system: systemPrompt,
+      model: "claude-haiku-4-5",
+      max_tokens: 1024,
+      system: [
+        {
+          type: "text",
+          text: staticInstructions,
+          cache_control: { type: "ephemeral" },
+        },
+        {
+          type: "text",
+          text: briefingContext,
+        },
+      ],
       messages,
       tools: [
         {
@@ -72,6 +78,15 @@ ${JSON.stringify(briefing, null, 2)}`;
         try {
           for await (const event of stream) {
             if (
+              event.type === "content_block_start" &&
+              event.content_block.type === "server_tool_use"
+            ) {
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({ status: "Checking the web…" })}\n\n`
+                )
+              );
+            } else if (
               event.type === "content_block_delta" &&
               event.delta.type === "text_delta"
             ) {
