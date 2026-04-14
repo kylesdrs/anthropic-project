@@ -13,13 +13,9 @@ import type { WeatherConditions } from "../data/bom";
 import type { SwellConditions } from "../data/swell";
 import type { SharkActivitySummary } from "../data/sharksmart";
 import { nearbyDrumlines } from "../data/sharksmart";
-import { estimateVisibility, estimateCurrentStrength } from "./visibility";
+import { estimateVisibility, estimateCurrentStrength, parseCloudCover } from "./visibility";
 import { assessSharkRisk } from "./shark-risk";
-import {
-  calculateSpeciesLikelihood,
-  targetSpecies,
-  type SpeciesLikelihood,
-} from "./species";
+import { targetSpecies } from "./species";
 import { calculateDiveScore, type DiveScore } from "./dive-score";
 import { getRegulation } from "../data/fisheries";
 
@@ -30,6 +26,7 @@ export interface SiteVisibility {
   rating: string;
   confidence: string;
   factors: { name: string; impact: number; description: string }[];
+  explanation: string;
 }
 
 export interface SiteSharkRisk {
@@ -60,15 +57,17 @@ export interface ConditionsFit {
 
 export interface SiteSpecies {
   name: string;
-  likelihood: SpeciesLikelihood;
   regulation: string;
+  seasonRange: string;
+  inTempRange: boolean;
 }
 
 export interface RankingInput {
   weather: WeatherConditions;
   swell: SwellConditions;
   sharkActivity: SharkActivitySummary;
-  timeOfDay: "dawn" | "morning" | "midday" | "afternoon" | "dusk";
+  timeOfDay: "night" | "dawn" | "morning" | "midday" | "afternoon" | "dusk";
+  hasRealSharkData: boolean;
 }
 
 // --- Ranking ---
@@ -91,11 +90,14 @@ export function rankSites(
       {
         rainfall: input.weather.rainfall,
         swell: input.swell.current,
+        swellTrend: input.swell.trend,
         windDirection: input.weather.observation.windDirection,
         windSpeed: input.weather.observation.windSpeed,
+        windGust: input.weather.observation.windGust,
         tides: input.weather.tides,
         month,
         seaSurfaceTemp: input.weather.seaSurfaceTemp,
+        cloud: input.weather.observation.cloud,
       },
       site
     );
@@ -106,11 +108,10 @@ export function rankSites(
       input.weather.tides.currentState
     );
 
-    // 4. Species likelihood
-    const avgDepth =
-      (site.depthRange.min + site.depthRange.max) / 2;
+    // 4. Species present at this site (seasonal reference only — no likelihood scores)
+    const waterTemp = input.weather.seaSurfaceTemp ?? 21;
 
-    const topSpecies = targetSpecies
+    const siteSpecies: SiteSpecies[] = targetSpecies
       .filter((sp) =>
         site.targetSpecies.some(
           (ts) =>
@@ -118,59 +119,56 @@ export function rankSites(
         )
       )
       .map((sp) => {
-        const likelihood = calculateSpeciesLikelihood(sp, {
-          month,
-          waterTemp: input.weather.seaSurfaceTemp ?? 21,
-          estimatedVis: visEstimate.metres,
-          currentStrength,
-          timeOfDay: input.timeOfDay,
-          siteStructure: site.structure,
-          depth: avgDepth,
-        });
-
         const reg = getRegulation(sp.id);
         const regulation = reg
           ? `${reg.minSizeCm > 0 ? `${reg.minSizeCm}cm min` : "No min size"}${reg.maxSizeCm ? `, ${reg.maxSizeCm}cm max` : ""}, bag ${reg.bagLimit}`
           : "";
 
-        return {
-          name: sp.commonName,
-          likelihood,
-          regulation,
-        };
-      })
-      .sort((a, b) => b.likelihood.score - a.likelihood.score);
+        // Build human-readable season range
+        const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        const peakMonths = sp.season.peak;
+        const seasonRange = peakMonths.length > 0
+          ? `${monthNames[peakMonths[0] - 1]}–${monthNames[peakMonths[peakMonths.length - 1] - 1]}`
+          : "Year-round";
 
-    // 5. Shark risk
-    const nearEstuary =
-      site.id === "dee-why-head" || site.id === "narrabeen-head";
-    const drumlines = nearbyDrumlines(site.lat, site.lng, 3);
+        const inTempRange = waterTemp >= sp.tempRange.min && waterTemp <= sp.tempRange.max;
 
-    const sharkRisk = assessSharkRisk({
-      sharkActivity: input.sharkActivity,
-      daysSinceSignificantRain: input.weather.rainfall.daysSinceSignificantRain,
-      rainfallLast24h: input.weather.rainfall.last24h,
-      estimatedVis: visEstimate.metres,
-      timeOfDay: input.timeOfDay,
-      month,
-      nearEstuary,
-      drumlinesCoveringSite: drumlines.length,
-    });
+        return { name: sp.commonName, regulation, seasonRange, inTempRange };
+      });
+
+    // 5. Shark risk (only when real data is available)
+    let sharkRisk: ReturnType<typeof assessSharkRisk> | null = null;
+    if (input.hasRealSharkData) {
+      const nearEstuary =
+        site.id === "dee-why-head" || site.id === "narrabeen-head";
+      const drumlines = nearbyDrumlines(site.lat, site.lng, 3);
+
+      sharkRisk = assessSharkRisk({
+        sharkActivity: input.sharkActivity,
+        daysSinceSignificantRain: input.weather.rainfall.daysSinceSignificantRain,
+        rainfallLast24h: input.weather.rainfall.last24h,
+        estimatedVis: visEstimate.metres,
+        timeOfDay: input.timeOfDay,
+        month,
+        nearEstuary,
+        drumlinesCoveringSite: drumlines.length,
+      });
+    }
 
     // 6. Overall dive score
     const diveScore = calculateDiveScore({
       visibility: visEstimate,
       sharkRisk,
-      speciesScores: topSpecies.map((s) => ({
-        speciesName: s.name,
-        likelihood: s.likelihood,
-      })),
       swell: input.swell.current,
       windSpeed: input.weather.observation.windSpeed,
+      windGust: input.weather.observation.windGust,
       windDirection: input.weather.observation.windDirection,
       airTemp: input.weather.observation.airTemp,
       waterTemp: input.weather.seaSurfaceTemp,
       site,
+      timeOfDay: input.timeOfDay,
+      cloud: input.weather.observation.cloud,
+      tideState: input.weather.tides.currentState,
     });
 
     // 7. Warnings
@@ -178,7 +176,7 @@ export function rankSites(
 
     // 8. Build explanation paragraph
     const explanation = generateScoreExplanation(
-      site, input, diveScore, conditionsFit, visEstimate, topSpecies, sharkRisk
+      site, input, diveScore, conditionsFit, visEstimate, sharkRisk
     );
 
     return {
@@ -191,13 +189,16 @@ export function rankSites(
         rating: visEstimate.rating,
         confidence: visEstimate.confidence,
         factors: visEstimate.factors,
+        explanation: visEstimate.explanation,
       },
-      sharkRisk: {
-        level: sharkRisk.level,
-        score: sharkRisk.score,
-        recommendation: sharkRisk.recommendation,
-      },
-      topSpecies,
+      sharkRisk: sharkRisk
+        ? {
+            level: sharkRisk.level,
+            score: sharkRisk.score,
+            recommendation: sharkRisk.recommendation,
+          }
+        : { level: "unknown", score: 0, recommendation: "No shark data available" },
+      topSpecies: siteSpecies,
       warnings,
       explanation,
     };
@@ -220,26 +221,26 @@ function assessConditionsFit(
   site: DiveSite,
   input: RankingInput
 ): ConditionsFit {
-  const swellOk =
-    input.swell.current.height <= site.bestConditions.swellMax;
+  // Use directional swell threshold if available, otherwise fall back to global max
+  const swellDir = input.swell.current.direction;
+  const dirThreshold = getDirectionalSwellMax(site, swellDir);
+  const swellOk = input.swell.current.height <= dirThreshold;
 
   const swellProtected =
     site.bestConditions.swellDirectionProtected.length === 0 ||
-    site.bestConditions.swellDirectionProtected.includes(
-      input.swell.current.direction
-    );
+    site.bestConditions.swellDirectionProtected.includes(swellDir);
 
   const windIdeal = site.bestConditions.windDirectionIdeal.includes(
     input.weather.observation.windDirection
   );
 
+  const tideState = input.weather.tides.currentState;
+  const isRising = tideState === "early_rising" || tideState === "mid_rising";
+  const isHighOrRising = isRising || tideState === "high_slack";
   const tideGood =
     site.bestConditions.tidePreference === "any" ||
-    (site.bestConditions.tidePreference === "rising" &&
-      input.weather.tides.currentState === "rising") ||
-    (site.bestConditions.tidePreference === "high" &&
-      (input.weather.tides.currentState === "high_slack" ||
-        input.weather.tides.currentState === "rising"));
+    (site.bestConditions.tidePreference === "rising" && isRising) ||
+    (site.bestConditions.tidePreference === "high" && isHighOrRising);
 
   // Overall fit
   const fitScore =
@@ -264,9 +265,8 @@ function generateScoreExplanation(
   input: RankingInput,
   diveScore: DiveScore,
   fit: ConditionsFit,
-  vis: { metres: number; rating: string },
-  topSpecies: SiteSpecies[],
-  sharkRisk: { level: string; score: number }
+  vis: { metres: number; rating: string; factors?: { name: string; impact: number; description: string }[]; explanation?: string },
+  sharkRisk: { level: string; score: number } | null
 ): string {
   const parts: string[] = [];
   const score = diveScore.overall;
@@ -274,11 +274,30 @@ function generateScoreExplanation(
   const wind = input.weather.observation;
   const tide = input.weather.tides;
 
+  // Night — short-circuit explanation
+  if (input.timeOfDay === "night") {
+    return `${site.name} scores ${score}/10 — it's dark. You can't spearfish without natural light. Wait for daylight.`;
+  }
+
   // Opening — score context
   const label = diveScore.label.toLowerCase();
   parts.push(
     `${site.name} scores ${score}/10 (${diveScore.label}) today.`
   );
+
+  // Sunlight context
+  if (input.timeOfDay === "dusk") {
+    parts.push("Light is fading — you'll have limited time before it's too dark to dive safely.");
+  } else if (input.timeOfDay === "dawn") {
+    parts.push("Early light — visibility will improve as the sun comes up.");
+  } else if (input.weather.observation.cloud) {
+    const oktas = parseCloudCover(input.weather.observation.cloud);
+    if (oktas >= 7) {
+      parts.push(`Overcast skies (${input.weather.observation.cloud}) — reduced light penetration underwater, harder to spot fish.`);
+    } else if (oktas >= 5) {
+      parts.push(`Mostly cloudy (${input.weather.observation.cloud}) — less light than ideal for spotting fish.`);
+    }
+  }
 
   // Swell explanation
   if (fit.swellOk) {
@@ -286,11 +305,11 @@ function generateScoreExplanation(
       ? `, and the ${swell.direction} direction is one this spot handles well`
       : `, though the ${swell.direction} swell direction isn't ideal — the site is more exposed from that angle`;
     parts.push(
-      `The ${swell.height}m swell at ${swell.period}s is within the ${site.bestConditions.swellMax}m limit${protectedNote}.`
+      `The ${swell.height}m swell at ${swell.period}s is within the ${getDirectionalSwellMax(site, swell.direction)}m limit for ${swell.direction} swell${protectedNote}.`
     );
   } else {
     parts.push(
-      `The ${swell.height}m swell exceeds this site's ${site.bestConditions.swellMax}m safe limit, which is the main concern.`
+      `The ${swell.height}m ${swell.direction} swell exceeds this site's ${getDirectionalSwellMax(site, swell.direction)}m safe limit from that direction, which is the main concern.`
     );
   }
 
@@ -311,57 +330,53 @@ function generateScoreExplanation(
     );
   }
 
-  // Visibility
-  parts.push(
-    `Visibility is estimated at ${vis.metres}m (${vis.rating}).`
-  );
+  // Visibility — use the per-site explanation if available
+  if (vis.explanation) {
+    parts.push(vis.explanation);
+  } else {
+    parts.push(
+      `Visibility is estimated at ${vis.metres}m (${vis.rating}).`
+    );
+  }
 
   // Tide
-  const tideState = tide.currentState.replace("_", " ");
+  const tideStateStr = tide.currentState.replace(/_/g, " ");
+  const tideIsRising = tide.currentState === "early_rising" || tide.currentState === "mid_rising";
   if (fit.tideGood) {
     parts.push(
-      `The ${tideState} tide works well here${tide.currentState === "rising" ? " — clean ocean water is pushing inshore over the reef" : ""}.`
+      `The ${tideStateStr} tide works well here${tideIsRising ? " — clean ocean water is pushing inshore over the reef" : ""}.`
     );
   } else {
     parts.push(
-      `The ${tideState} tide isn't the best for this spot — ${site.bestConditions.tidePreference === "rising" ? "a rising tide would bring cleaner water in" : "higher tide would be better for access"}.`
+      `The ${tideStateStr} tide isn't the best for this spot — ${site.bestConditions.tidePreference === "rising" ? "a rising tide would bring cleaner water in" : "higher tide would be better for access"}.`
     );
   }
 
-  // Species
-  const goodSpecies = topSpecies.filter(s => s.likelihood.score >= 50);
-  if (goodSpecies.length > 0) {
-    const speciesStr = goodSpecies
-      .slice(0, 3)
-      .map(s => `${s.name} (${s.likelihood.score}%)`)
-      .join(", ");
-    parts.push(
-      `Best chances today: ${speciesStr}.`
-    );
-  } else if (topSpecies.length > 0) {
-    parts.push(
-      `Fish activity is on the lower side — ${topSpecies[0].name} at ${topSpecies[0].likelihood.score}% is the best prospect.`
-    );
-  }
-
-  // Shark risk (only if notable)
-  if (sharkRisk.level === "elevated" || sharkRisk.level === "high") {
-    parts.push(
-      `Shark risk is ${sharkRisk.level} — worth factoring into your decision.`
-    );
-  } else if (sharkRisk.level === "low") {
-    parts.push(`Shark risk is low.`);
+  // Shark risk (only when real data is available)
+  if (sharkRisk) {
+    if (sharkRisk.level === "elevated" || sharkRisk.level === "high") {
+      parts.push(
+        `Shark risk is ${sharkRisk.level} — worth factoring into your decision.`
+      );
+    } else if (sharkRisk.level === "low") {
+      parts.push(`Shark risk is low.`);
+    }
   }
 
   // Rain context (if significant)
   const rain = input.weather.rainfall;
+  const swellEnergy = swell.height * swell.height * swell.period;
   if (rain.last24h >= 10) {
     parts.push(
       `Note: ${rain.last24h}mm of rain in the last 24 hours means runoff will be affecting water quality.`
     );
-  } else if (rain.daysSinceSignificantRain >= 5) {
+  } else if (rain.daysSinceSignificantRain >= 5 && swellEnergy < 10) {
     parts.push(
       `${rain.daysSinceSignificantRain} days since significant rain is helping water clarity.`
+    );
+  } else if (rain.daysSinceSignificantRain >= 5 && swellEnergy >= 10) {
+    parts.push(
+      `${rain.daysSinceSignificantRain} days dry, but the swell is keeping coastal water turbid regardless.`
     );
   }
 
@@ -374,13 +389,21 @@ function generateWarnings(
   site: DiveSite,
   input: RankingInput,
   fit: ConditionsFit,
-  sharkRisk: { level: string }
+  sharkRisk: { level: string } | null
 ): string[] {
   const warnings: string[] = [];
 
+  // Night time warning
+  if (input.timeOfDay === "night") {
+    warnings.push("Too dark to dive — no natural light");
+  } else if (input.timeOfDay === "dusk") {
+    warnings.push("Fading light — limited time before dark");
+  }
+
   if (!fit.swellOk) {
+    const dirMax = getDirectionalSwellMax(site, input.swell.current.direction);
     warnings.push(
-      `Swell ${input.swell.current.height}m exceeds site max ${site.bestConditions.swellMax}m`
+      `Swell ${input.swell.current.height}m ${input.swell.current.direction} exceeds site limit ${dirMax}m from that direction`
     );
   }
 
@@ -389,8 +412,9 @@ function generateWarnings(
   }
 
   if (
-    sharkRisk.level === "elevated" ||
-    sharkRisk.level === "high"
+    sharkRisk &&
+    (sharkRisk.level === "elevated" ||
+    sharkRisk.level === "high")
   ) {
     warnings.push(`${sharkRisk.level} shark risk at this location`);
   }
@@ -408,4 +432,36 @@ function generateWarnings(
   }
 
   return warnings;
+}
+
+/**
+ * Get the maximum safe swell height for a site from a given direction.
+ * Uses directional thresholds if available, falls back to global swellMax.
+ * Normalises 16-point compass to 8-point for matching (SSE → S, etc).
+ */
+function getDirectionalSwellMax(site: DiveSite, direction: string): number {
+  const thresholds = site.swellThresholds;
+  if (!thresholds || Object.keys(thresholds).length === 0) {
+    return site.bestConditions.swellMax;
+  }
+
+  // Try exact match first
+  if (thresholds[direction] !== undefined) return thresholds[direction]!;
+
+  // Normalise to 8-point and try
+  const normalised = normalise8Point(direction);
+  if (thresholds[normalised] !== undefined) return thresholds[normalised]!;
+
+  // Fall back to global max
+  return site.bestConditions.swellMax;
+}
+
+function normalise8Point(dir: string): string {
+  const map: Record<string, string> = {
+    N: "N", NNE: "NE", NE: "NE", ENE: "E",
+    E: "E", ESE: "SE", SE: "SE", SSE: "S",
+    S: "S", SSW: "SW", SW: "SW", WSW: "W",
+    W: "W", WNW: "NW", NW: "NW", NNW: "N",
+  };
+  return map[dir] ?? dir;
 }

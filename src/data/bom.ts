@@ -37,7 +37,7 @@ export interface TidePoint {
 
 export interface TideData {
   predictions: TidePoint[];
-  currentState: "rising" | "falling" | "high_slack" | "low_slack";
+  currentState: "low_slack" | "early_rising" | "mid_rising" | "high_slack" | "early_falling" | "mid_falling";
   nextHigh: TidePoint | null;
   nextLow: TidePoint | null;
 }
@@ -62,11 +62,11 @@ export interface WeatherConditions {
 
 /** Manly Hydraulics / Fort Denison — closest to Northern Beaches */
 const BOM_OBSERVATIONS_URL =
-  "http://www.bom.gov.au/fwo/IDN60901/IDN60901.94768.json";
+  "https://www.bom.gov.au/fwo/IDN60901/IDN60901.94768.json";
 
 /** Sydney Airport — reliable fallback with full obs */
 const BOM_SYDNEY_AIRPORT_URL =
-  "http://www.bom.gov.au/fwo/IDN60901/IDN60901.94767.json";
+  "https://www.bom.gov.au/fwo/IDN60901/IDN60901.94767.json";
 
 // --- Helpers ---
 
@@ -118,12 +118,22 @@ function parseBomObservation(raw: unknown): WeatherObservation {
 
   const latest = data[0];
 
+  // Wind speed: prefer knots, fall back to km/h conversion
+  const windSpeedKt =
+    (latest.wind_spd_kt as number) ??
+    ((latest.wind_spd_kmh as number) ?? 0) / 1.852;
+
+  // Wind gust: BOM harbour stations often omit gust_kt — try gust_kmh
+  const gustKt =
+    (latest.gust_kt as number) ??
+    ((latest.gust_kmh as number) ?? 0) / 1.852;
+
   return {
     timestamp: latest.local_date_time_full as string,
     airTemp: (latest.air_temp as number) ?? 0,
     humidity: (latest.rel_hum as number) ?? 0,
-    windSpeed: (latest.wind_spd_kt as number) ?? 0,
-    windGust: (latest.gust_kt as number) ?? 0,
+    windSpeed: Math.round(windSpeedKt),
+    windGust: Math.round(gustKt),
     windDirection:
       (latest.wind_dir as string) ||
       parseWindDirection(latest.wind_dir_deg as number | null),
@@ -137,6 +147,12 @@ function parseBomObservation(raw: unknown): WeatherObservation {
 /**
  * Estimate rainfall over the last 24/48/72 hours from BOM observation history.
  * BOM half-hourly obs go back ~72 hours in the JSON feed.
+ *
+ * BOM rain_trace is cumulative since 9am and resets each morning.
+ * Data is sorted newest-first, so we reverse to iterate chronologically.
+ * The increment between consecutive readings is the period rainfall;
+ * when rain_trace drops (9am reset), the new value is the first
+ * accumulation of the new period.
  */
 function parseRainfall(raw: unknown): RainfallData {
   const data = (raw as { observations: { data: Record<string, unknown>[] } })
@@ -148,27 +164,40 @@ function parseRainfall(raw: unknown): RainfallData {
   let last72h = 0;
   let lastSignificantRainTs: number | null = null;
 
-  // BOM "rain_trace" is cumulative since 9am — we need to track resets
-  // Instead, use the rainfall_since_9am and work with daily rain values.
-  // For simplicity, we sum "rain_trace" where it represents period rainfall.
-  let prevRainTrace = 0;
-
+  // Parse all observations into typed objects first
+  interface RainObs {
+    time: number;
+    rainTrace: number;
+  }
+  const parsed: RainObs[] = [];
   for (const obs of data) {
     const timeStr = obs.local_date_time_full as string;
     if (!timeStr) continue;
 
-    // Parse BOM time format: "20260211143000" -> Date
     const year = parseInt(timeStr.slice(0, 4));
     const month = parseInt(timeStr.slice(4, 6)) - 1;
     const day = parseInt(timeStr.slice(6, 8));
     const hour = parseInt(timeStr.slice(8, 10));
     const min = parseInt(timeStr.slice(10, 12));
     const obsTime = new Date(year, month, day, hour, min).getTime();
-    const hoursAgo = (now - obsTime) / (1000 * 60 * 60);
-
     const rainTrace = parseFloat(obs.rain_trace as string) || 0;
 
-    // Detect rain_trace reset (new day 9am) — it goes back to 0
+    parsed.push({ time: obsTime, rainTrace });
+  }
+
+  // Reverse to chronological order (oldest-first) so we can correctly
+  // detect the incremental rainfall between consecutive readings.
+  parsed.reverse();
+
+  let prevRainTrace = 0;
+
+  for (const obs of parsed) {
+    const hoursAgo = (now - obs.time) / (1000 * 60 * 60);
+    const rainTrace = obs.rainTrace;
+
+    // When rain_trace drops, a 9am reset occurred. The new value is
+    // the first accumulation of the new period. When it rises (or stays),
+    // the increment is the period rainfall.
     const periodRain = rainTrace < prevRainTrace ? rainTrace : rainTrace - prevRainTrace;
     prevRainTrace = rainTrace;
 
@@ -177,9 +206,9 @@ function parseRainfall(raw: unknown): RainfallData {
       if (hoursAgo <= 48) last48h += periodRain;
       if (hoursAgo <= 72) last72h += periodRain;
 
-      // Track last significant rain day (>10mm cumulated in a rolling 24h)
+      // Track last significant rain (>2mm in a single period reading)
       if (periodRain > 2) {
-        lastSignificantRainTs = obsTime;
+        lastSignificantRainTs = obs.time;
       }
     }
   }
@@ -239,20 +268,28 @@ export function estimateTideState(
     }
   }
 
-  let currentState: TideData["currentState"] = "rising";
+  let currentState: TideData["currentState"] = "mid_rising";
   if (prevPoint && nextPoint) {
     const prevMs = new Date(prevPoint.time).getTime();
     const nextMs = new Date(nextPoint.time).getTime();
     const progress = (nowMs - prevMs) / (nextMs - prevMs);
 
     if (prevPoint.type === "low" && nextPoint.type === "high") {
-      currentState = progress > 0.9 ? "high_slack" : "rising";
+      // Rising: low_slack → early_rising → mid_rising → high_slack
+      if (progress < 0.08) currentState = "low_slack";
+      else if (progress < 0.4) currentState = "early_rising";
+      else if (progress < 0.9) currentState = "mid_rising";
+      else currentState = "high_slack";
     } else if (prevPoint.type === "high" && nextPoint.type === "low") {
-      currentState = progress > 0.9 ? "low_slack" : "falling";
+      // Falling: high_slack → early_falling → mid_falling → low_slack
+      if (progress < 0.08) currentState = "high_slack";
+      else if (progress < 0.4) currentState = "early_falling";
+      else if (progress < 0.9) currentState = "mid_falling";
+      else currentState = "low_slack";
     }
   } else if (prevPoint) {
     // After the last prediction — estimate from previous point
-    currentState = prevPoint.type === "high" ? "falling" : "rising";
+    currentState = prevPoint.type === "high" ? "early_falling" : "early_rising";
   }
 
   return { currentState, nextHigh, nextLow };
@@ -262,7 +299,7 @@ export function estimateTideState(
  * Fetch tide predictions from BOM tide tables.
  *
  * BOM publishes tide tables at:
- * http://www.bom.gov.au/australia/tides/#!/nsw-sydney-fort-denison
+ * https://www.bom.gov.au/australia/tides/#!/nsw-sydney-fort-denison
  *
  * Since there's no clean JSON API, for now we provide a function
  * to manually supply tide data and also attempt to scrape if possible.
@@ -273,7 +310,7 @@ async function fetchTideData(): Promise<TideData> {
   // This endpoint isn't officially documented but sometimes works
   try {
     const res = await fetch(
-      "http://www.bom.gov.au/ntc/IDO59001/IDO59001_2026_NSW_TP011.json",
+      "https://www.bom.gov.au/ntc/IDO59001/IDO59001_2026_NSW_TP011.json",
       {
         cache: "no-store",
         headers: {
@@ -334,12 +371,12 @@ function generateApproximateTides(): TidePoint[] {
 
     points.push({
       time: new Date(highMs).toISOString(),
-      height: 1.5 + Math.sin(i * 0.3) * 0.2, // vary slightly
+      height: Math.round((1.5 + Math.sin(i * 0.3) * 0.2) * 100) / 100,
       type: "high",
     });
     points.push({
       time: new Date(lowMs).toISOString(),
-      height: 0.4 + Math.sin(i * 0.3) * 0.1,
+      height: Math.round((0.4 + Math.sin(i * 0.3) * 0.1) * 100) / 100,
       type: "low",
     });
   }
@@ -364,6 +401,48 @@ function parseSSTFromObs(raw: unknown): number | null {
   }
 
   return null;
+}
+
+/**
+ * Fetch SST from Open-Meteo Marine API as a fallback.
+ * The marine API provides sea_surface_temperature globally.
+ */
+async function fetchSSTFromOpenMeteo(): Promise<number | null> {
+  try {
+    const res = await fetch(
+      "https://marine-api.open-meteo.com/v1/marine?latitude=-33.74&longitude=151.32&hourly=sea_surface_temperature&forecast_days=1&timezone=Australia%2FSydney",
+      { cache: "no-store" }
+    );
+    if (!res.ok) return null;
+
+    const data = (await res.json()) as {
+      hourly?: {
+        time?: string[];
+        sea_surface_temperature?: (number | null)[];
+      };
+    };
+
+    const times = data.hourly?.time;
+    const temps = data.hourly?.sea_surface_temperature;
+    if (!times || !temps || times.length === 0) return null;
+
+    // Find entry closest to now
+    const nowMs = Date.now();
+    let closestIdx = 0;
+    let closestDiff = Infinity;
+    for (let i = 0; i < times.length; i++) {
+      const diff = Math.abs(new Date(times[i]).getTime() - nowMs);
+      if (diff < closestDiff) {
+        closestDiff = diff;
+        closestIdx = i;
+      }
+    }
+
+    const sst = temps[closestIdx];
+    return sst !== null && sst !== undefined ? Math.round(sst * 10) / 10 : null;
+  } catch {
+    return null;
+  }
 }
 
 // --- Main fetch function ---
@@ -391,7 +470,11 @@ export async function fetchWeatherData(): Promise<WeatherConditions | null> {
 
     const observation = parseBomObservation(rawObs);
     const rainfall = parseRainfall(rawObs);
-    const seaSurfaceTemp = parseSSTFromObs(rawObs);
+    let seaSurfaceTemp = parseSSTFromObs(rawObs);
+    // BOM coastal stations often don't report SST — fall back to Open-Meteo
+    if (seaSurfaceTemp === null) {
+      seaSurfaceTemp = await fetchSSTFromOpenMeteo();
+    }
     const tides = await fetchTideData();
 
     return {

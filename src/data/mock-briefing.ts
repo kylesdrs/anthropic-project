@@ -22,11 +22,13 @@ function daysAgo(d: number): string {
 
 function getTimeOfDay(): string {
   const h = new Date().getHours();
+  if (h < 5) return "night";
   if (h < 6) return "dawn";
   if (h < 10) return "morning";
   if (h < 14) return "midday";
   if (h < 17) return "afternoon";
-  return "dusk";
+  if (h < 19) return "dusk";
+  return "night";
 }
 
 function generateTidePredictions() {
@@ -58,7 +60,7 @@ function generateTidePredictions() {
   const nextHigh = points.find((p) => p.type === "high" && new Date(p.time).getTime() > nowMs) ?? null;
   const nextLow = points.find((p) => p.type === "low" && new Date(p.time).getTime() > nowMs) ?? null;
 
-  return { predictions: points, currentState: "rising", nextHigh, nextLow };
+  return { predictions: points, currentState: "mid_rising" as const, nextHigh, nextLow };
 }
 
 export function generateMockBriefing() {
@@ -115,45 +117,13 @@ export function generateMockBriefing() {
           directionDeg: 155,
         })),
         windForecast: [],
+        weatherForecast: [],
         fetchedAt: new Date().toISOString(),
       },
       sharkActivity: {
-        alerts: [
-          {
-            id: "mock-001",
-            date: daysAgo(1),
-            type: "tagged_detection",
-            species: "white",
-            location: { lat: -33.7404, lng: 151.3235, beach: "Long Reef" },
-            details: "Tagged white shark (2.8m) detected at Long Reef listening station. Heading south.",
-          },
-          {
-            id: "mock-002",
-            date: daysAgo(2),
-            type: "drone_sighting",
-            species: "unknown",
-            location: { lat: -33.7495, lng: 151.312, beach: "Dee Why" },
-            details: "Shark (~2m) spotted by Westpac Lifesaver drone 150m offshore. Beach cleared for 1 hour.",
-          },
-          {
-            id: "mock-003",
-            date: daysAgo(3),
-            type: "drumline_catch",
-            species: "bull",
-            location: { lat: -33.737, lng: 151.3245, beach: "Long Reef North" },
-            details: "Bull shark (1.9m) caught on SMART drumline. Tagged and released 1km offshore.",
-          },
-          {
-            id: "mock-004",
-            date: daysAgo(5),
-            type: "aerial_sighting",
-            species: "white",
-            location: { lat: -33.7097, lng: 151.316, beach: "Narrabeen" },
-            details: "White shark (3m+) spotted by DPI aerial patrol 200m off Narrabeen headland.",
-          },
-        ],
-        daysSinceLastActivity: 1,
-        source: "mock",
+        alerts: [],
+        daysSinceLastActivity: null,
+        source: "seed",
         fetchedAt: new Date().toISOString(),
       },
     },
@@ -177,16 +147,16 @@ export function generateMockBriefing() {
         diveScore: {
           overall: 7.2,
           label: "Good",
-          breakdown: { visibility: 7, fishActivity: 7.5, safety: 7, comfort: 8 },
-          topReasons: ["Good vis (8.5m)", "Good chances: Kingfish, Trevally", "Light offshore NW"],
+          breakdown: { visibility: 7, conditionsFit: 7.5, safety: 7, comfort: 8 },
+          topReasons: ["Good vis (8.5m)", "Light offshore NW"],
           concerns: [],
         },
         conditionsFit: { swellOk: false, windIdeal: true, tideGood: true, overallFit: "good" },
         topSpecies: [
-          { name: "Yellowtail Kingfish", likelihood: { score: 65, reasoning: "Good conditions — warm water, reasonable vis, rising tide" }, regulation: "65cm min, bag 5" },
-          { name: "Silver Trevally", likelihood: { score: 58, reasoning: "Year-round resident, good reef structure" }, regulation: "No min size, bag 20" },
-          { name: "Australian Bonito", likelihood: { score: 52, reasoning: "Active in warm water, often in schools around headlands" }, regulation: "No min size, bag 20" },
-          { name: "Snapper", likelihood: { score: 40, reasoning: "Present year-round, better chances in cooler months" }, regulation: "30cm min, bag 10" },
+          { name: "Yellowtail Kingfish", regulation: "65cm min, bag 5", seasonRange: "Oct–May", inTempRange: true },
+          { name: "Silver Trevally", regulation: "No min size, bag 20", seasonRange: "Oct–Apr", inTempRange: true },
+          { name: "Australian Bonito", regulation: "No min size, bag 20", seasonRange: "Nov–Apr", inTempRange: true },
+          { name: "Snapper", regulation: "30cm min, bag 10", seasonRange: "Apr–Aug", inTempRange: true },
         ],
         warnings: [],
       },
@@ -196,15 +166,15 @@ export function generateMockBriefing() {
         diveScore: {
           overall: 6.8,
           label: "Good",
-          breakdown: { visibility: 7, fishActivity: 7, safety: 6.5, comfort: 7.5 },
-          topReasons: ["Good vis (8.5m)", "Good chances: Kingfish"],
+          breakdown: { visibility: 7, conditionsFit: 7, safety: 6.5, comfort: 7.5 },
+          topReasons: ["Good vis (8.5m)"],
           concerns: [],
         },
         conditionsFit: { swellOk: false, windIdeal: true, tideGood: true, overallFit: "fair" },
         topSpecies: [
-          { name: "Yellowtail Kingfish", likelihood: { score: 60, reasoning: "Pelagics move through on current" }, regulation: "65cm min, bag 5" },
-          { name: "Silver Trevally", likelihood: { score: 55, reasoning: "Reef resident species" }, regulation: "No min size, bag 20" },
-          { name: "Snapper", likelihood: { score: 38, reasoning: "Present in deeper ledges" }, regulation: "30cm min, bag 10" },
+          { name: "Yellowtail Kingfish", regulation: "65cm min, bag 5", seasonRange: "Oct–May", inTempRange: true },
+          { name: "Silver Trevally", regulation: "No min size, bag 20", seasonRange: "Oct–Apr", inTempRange: true },
+          { name: "Snapper", regulation: "30cm min, bag 10", seasonRange: "Apr–Aug", inTempRange: true },
         ],
         warnings: [],
       },
@@ -214,15 +184,15 @@ export function generateMockBriefing() {
         diveScore: {
           overall: 6.4,
           label: "Fair",
-          breakdown: { visibility: 6.5, fishActivity: 7, safety: 6, comfort: 6.5 },
-          topReasons: ["Good chances: Kingfish, Bonito"],
+          breakdown: { visibility: 6.5, conditionsFit: 7, safety: 6, comfort: 6.5 },
+          topReasons: [],
           concerns: ["Swell 1.2m exceeds site max 1.0m"],
         },
         conditionsFit: { swellOk: false, windIdeal: true, tideGood: true, overallFit: "fair" },
         topSpecies: [
-          { name: "Yellowtail Kingfish", likelihood: { score: 62, reasoning: "Northern drop-off is productive" }, regulation: "65cm min, bag 5" },
-          { name: "Australian Bonito", likelihood: { score: 55, reasoning: "Schools frequent the reef edge" }, regulation: "No min size, bag 20" },
-          { name: "Silver Trevally", likelihood: { score: 50, reasoning: "Resident on the reef" }, regulation: "No min size, bag 20" },
+          { name: "Yellowtail Kingfish", regulation: "65cm min, bag 5", seasonRange: "Oct–May", inTempRange: true },
+          { name: "Australian Bonito", regulation: "No min size, bag 20", seasonRange: "Nov–Apr", inTempRange: true },
+          { name: "Silver Trevally", regulation: "No min size, bag 20", seasonRange: "Oct–Apr", inTempRange: true },
         ],
         warnings: ["Swell 1.2m exceeds site max 1.0m", "Restricted: Spearfishing for finfish only"],
       },
@@ -232,15 +202,15 @@ export function generateMockBriefing() {
         diveScore: {
           overall: 6.1,
           label: "Fair",
-          breakdown: { visibility: 6.5, fishActivity: 6, safety: 6, comfort: 7 },
+          breakdown: { visibility: 6.5, conditionsFit: 6, safety: 6, comfort: 7 },
           topReasons: ["Good vis (8.5m)"],
           concerns: [],
         },
         conditionsFit: { swellOk: true, windIdeal: true, tideGood: true, overallFit: "good" },
         topSpecies: [
-          { name: "Snapper", likelihood: { score: 48, reasoning: "Good ledge habitat for snapper" }, regulation: "30cm min, bag 10" },
-          { name: "Yellowtail Kingfish", likelihood: { score: 42, reasoning: "Less frequent than southern sites" }, regulation: "65cm min, bag 5" },
-          { name: "Dusky Flathead", likelihood: { score: 35, reasoning: "Sand/reef interface habitat" }, regulation: "36-70cm slot, bag 10" },
+          { name: "Snapper", regulation: "30cm min, bag 10", seasonRange: "Apr–Aug", inTempRange: true },
+          { name: "Yellowtail Kingfish", regulation: "65cm min, bag 5", seasonRange: "Oct–May", inTempRange: true },
+          { name: "Dusky Flathead", regulation: "36-70cm slot, bag 10", seasonRange: "Year-round", inTempRange: true },
         ],
         warnings: ["Restricted: Spearfishing for finfish only"],
       },
@@ -250,15 +220,15 @@ export function generateMockBriefing() {
         diveScore: {
           overall: 5.8,
           label: "Fair",
-          breakdown: { visibility: 6.5, fishActivity: 5.5, safety: 5.5, comfort: 7 },
+          breakdown: { visibility: 6.5, conditionsFit: 5.5, safety: 5.5, comfort: 7 },
           topReasons: ["Good vis (8.5m)"],
           concerns: [],
         },
         conditionsFit: { swellOk: false, windIdeal: true, tideGood: true, overallFit: "fair" },
         topSpecies: [
-          { name: "Silver Trevally", likelihood: { score: 50, reasoning: "Gutter resident" }, regulation: "No min size, bag 20" },
-          { name: "Snapper", likelihood: { score: 38, reasoning: "Present in reef structure" }, regulation: "30cm min, bag 10" },
-          { name: "Dusky Flathead", likelihood: { score: 35, reasoning: "Sand patches adjacent to reef" }, regulation: "36-70cm slot, bag 10" },
+          { name: "Silver Trevally", regulation: "No min size, bag 20", seasonRange: "Oct–Apr", inTempRange: true },
+          { name: "Snapper", regulation: "30cm min, bag 10", seasonRange: "Apr–Aug", inTempRange: true },
+          { name: "Dusky Flathead", regulation: "36-70cm slot, bag 10", seasonRange: "Year-round", inTempRange: true },
         ],
         warnings: [],
       },
@@ -268,15 +238,15 @@ export function generateMockBriefing() {
         diveScore: {
           overall: 5.5,
           label: "Fair",
-          breakdown: { visibility: 6, fishActivity: 5.5, safety: 5.5, comfort: 6.5 },
+          breakdown: { visibility: 6, conditionsFit: 5.5, safety: 5.5, comfort: 6.5 },
           topReasons: [],
           concerns: [],
         },
         conditionsFit: { swellOk: false, windIdeal: true, tideGood: true, overallFit: "fair" },
         topSpecies: [
-          { name: "Snapper", likelihood: { score: 45, reasoning: "Good ledge habitat" }, regulation: "30cm min, bag 10" },
-          { name: "Dusky Flathead", likelihood: { score: 38, reasoning: "Sand/reef interface" }, regulation: "36-70cm slot, bag 10" },
-          { name: "Silver Trevally", likelihood: { score: 35, reasoning: "Present on reef" }, regulation: "No min size, bag 20" },
+          { name: "Snapper", regulation: "30cm min, bag 10", seasonRange: "Apr–Aug", inTempRange: true },
+          { name: "Dusky Flathead", regulation: "36-70cm slot, bag 10", seasonRange: "Year-round", inTempRange: true },
+          { name: "Silver Trevally", regulation: "No min size, bag 20", seasonRange: "Oct–Apr", inTempRange: true },
         ],
         warnings: [],
       },
@@ -286,19 +256,53 @@ export function generateMockBriefing() {
         diveScore: {
           overall: 4.5,
           label: "Marginal",
-          breakdown: { visibility: 8, fishActivity: 6.5, safety: 2, comfort: 4 },
+          breakdown: { visibility: 8, conditionsFit: 6.5, safety: 2, comfort: 4 },
           topReasons: ["Excellent vis (8.5m)"],
           concerns: ["Swell 1.2m exceeds site max 0.8m"],
         },
         conditionsFit: { swellOk: false, windIdeal: true, tideGood: false, overallFit: "poor" },
         topSpecies: [
-          { name: "Yellowtail Kingfish", likelihood: { score: 70, reasoning: "Deep water attracts large pelagics" }, regulation: "65cm min, bag 5" },
-          { name: "Cobia", likelihood: { score: 30, reasoning: "Occasional visitor in warm months" }, regulation: "60cm min, bag 5" },
-          { name: "Snapper", likelihood: { score: 45, reasoning: "Deep structure holds good fish" }, regulation: "30cm min, bag 10" },
+          { name: "Yellowtail Kingfish", regulation: "65cm min, bag 5", seasonRange: "Oct–May", inTempRange: true },
+          { name: "Cobia", regulation: "60cm min, bag 5", seasonRange: "Dec–Apr", inTempRange: true },
+          { name: "Snapper", regulation: "30cm min, bag 10", seasonRange: "Apr–Aug", inTempRange: true },
         ],
         warnings: ["Swell 1.2m exceeds site max 0.8m"],
       },
     ],
+    outlook: {
+      days: Array.from({ length: 5 }, (_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() + i);
+        const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        const dayName = i === 0 ? "Today" : i === 1 ? "Tmrw" : dayNames[d.getDay()];
+        const scores = [7.2, 6.0, 7.8, 5.1, 4.2];
+        const labels = ["Good", "Fair", "Good", "Fair", "Marginal"];
+        const swells = [1.2, 1.0, 0.6, 1.3, 1.8];
+        const dirs = ["SSE", "E", "NE", "S", "S"];
+        const rains = [10, 25, 5, 35, 55];
+        const summaries = [
+          "Light offshore, looks clean",
+          "Small swell, manageable conditions",
+          "Clean conditions — could be great",
+          "Shower risk — vis may drop",
+          "Rain expected — vis will suffer",
+        ];
+        return {
+          date: d.toLocaleDateString("en-CA", { timeZone: "Australia/Sydney" }),
+          dayName,
+          isToday: i === 0,
+          diveScore: scores[i],
+          scoreLabel: labels[i],
+          swell: { height: swells[i], period: 10, direction: dirs[i] },
+          wind: { speed: 8, direction: "W" },
+          rainProbability: rains[i],
+          precis: rains[i] > 40 ? "Showers" : "Partly cloudy",
+          summary: summaries[i],
+          source: (i < 3 ? "WW" : "OM") as "WW" | "OM" | "WW+OM",
+        };
+      }),
+      generatedAt: new Date().toISOString(),
+    },
     recommendation: {
       go: true,
       confidence: "high",
@@ -311,7 +315,7 @@ export function generateMockBriefing() {
         "Wind: NW 8kt",
         "Tide: rising",
         "Rain: 5d since significant rain",
-        "Best chances: Yellowtail Kingfish (65%), Silver Trevally (58%)",
+        "5d since significant rain — water should be clear",
       ],
     },
   };

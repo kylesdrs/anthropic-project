@@ -1,17 +1,14 @@
 /**
- * Visibility estimation algorithm.
+ * Visibility estimation engine v2.
  *
- * Predicts underwater visibility (metres) from environmental factors.
- * Northern Beaches baseline: ~5-8m typical, 10-15m+ on good days,
- * 1-3m after heavy rain or big swell.
+ * Predicts underwater visibility (metres) from environmental factors,
+ * with site-specific baselines, dirty water memory (D-Memory),
+ * swell energy calculations, six tidal phases, depth-based wind
+ * sensitivity, and confidence scoring.
  *
- * Primary factors (in order of impact):
- * 1. Rain history — runoff and sediment are the #1 vis killer
- * 2. Swell size and type — big swell stirs up the bottom
- * 3. Wind direction — offshore cleans, onshore dirties
- * 4. Tide state — rising tide often brings cleaner water
- * 5. Season — summer EAC pushes warm clear water inshore
- * 6. Site-specific modifiers (estuary proximity, depth, etc.)
+ * Each site has its own baseline vis, seasonal curve, runoff sensitivity,
+ * and wind sensitivity. The estimate explains what's helping and hurting
+ * vis at each specific site.
  */
 
 import type { RainfallData, TideData } from "../data/bom";
@@ -24,11 +21,14 @@ import type { DiveSite } from "../sites/northern-beaches";
 export interface VisibilityInput {
   rainfall: RainfallData;
   swell: SwellReading;
+  swellTrend?: "building" | "holding" | "dropping";
   windDirection: string;
-  windSpeed: number; // knots
+  windSpeed: number; // knots (sustained)
+  windGust: number; // knots (gusts)
   tides: TideData;
   month: number; // 1-12
   seaSurfaceTemp: number | null;
+  cloud?: string; // BOM cloud description e.g. "Overcast", "Partly cloudy", "Clear"
 }
 
 export interface VisibilityEstimate {
@@ -36,6 +36,8 @@ export interface VisibilityEstimate {
   confidence: "low" | "medium" | "high";
   rating: "excellent" | "good" | "fair" | "poor" | "terrible";
   factors: VisibilityFactor[];
+  /** Human-readable per-site explanation, e.g. "Vis at Freshwater: ~5m (baseline 7m in Feb, -2m rain, ...)" */
+  explanation: string;
 }
 
 export interface VisibilityFactor {
@@ -46,319 +48,743 @@ export interface VisibilityFactor {
 
 // --- Constants ---
 
-const BASELINE_VIS = 7; // metres — Northern Beaches average
-const MIN_VIS = 0.5;
-const MAX_VIS = 20;
+const FALLBACK_BASELINE = 6; // metres — typical Northern Beaches calm-day vis
+const MIN_VIS = 0.5; // Even in terrible conditions you can see your fins
+const MAX_VIS = 15;
+
+// Dirty water memory half-life in days (calm conditions)
+const TURBIDITY_HALF_LIFE_DAYS = 2;
 
 // --- Estimation ---
 
 /**
  * Estimate underwater visibility from current conditions.
+ * When a site is provided, uses site-specific baselines and sensitivities.
  */
 export function estimateVisibility(
   input: VisibilityInput,
   site?: DiveSite
 ): VisibilityEstimate {
-  let vis = BASELINE_VIS;
   const factors: VisibilityFactor[] = [];
 
-  // --- 1. Rainfall impact (biggest factor) ---
-  const rainImpact = calculateRainImpact(input.rainfall);
-  vis += rainImpact.impact;
-  factors.push(rainImpact);
+  // --- 1. Site-specific baseline with seasonal curve ---
+  const baseline = calculateBaseline(input.month, site);
+  factors.push(baseline.factor);
 
-  // --- 2. Swell impact ---
-  const swellImpact = calculateSwellImpact(input.swell);
-  vis += swellImpact.impact;
+  // --- 2. Dirty water memory (D-Memory) turbidity ---
+  const turbidity = calculateTurbidity(input.rainfall, input.swell, site);
+  factors.push(turbidity);
+
+  // --- 2b. Swell-driven turbidity (regional, independent of rain) ---
+  const swellTurbidity = calculateSwellTurbidity(input.swell, input.swellTrend);
+  factors.push(swellTurbidity);
+
+  // --- 3. Swell energy (height² × period), not just height ---
+  const swellImpact = calculateSwellEnergy(input.swell, input.swellTrend, site);
   factors.push(swellImpact);
 
-  // --- 3. Wind direction ---
-  const windImpact = calculateWindImpact(
-    input.windDirection,
-    input.windSpeed
-  );
-  vis += windImpact.impact;
-  factors.push(windImpact);
-
-  // --- 4. Tide state ---
-  const tideImpact = calculateTideImpact(input.tides);
-  vis += tideImpact.impact;
+  // --- 4. Six-phase tidal model ---
+  const tideImpact = calculateTidePhaseImpact(input.tides);
   factors.push(tideImpact);
 
-  // --- 5. Season / SST ---
-  const seasonImpact = calculateSeasonImpact(
-    input.month,
-    input.seaSurfaceTemp
+  // --- 5. Wind surface mixing (depth-based sensitivity) ---
+  const effectiveWind = Math.max(input.windSpeed, (input.windGust ?? 0) * 0.75);
+  const windImpact = calculateWindMixing(
+    input.windDirection,
+    Math.round(effectiveWind),
+    site
   );
-  vis += seasonImpact.impact;
-  factors.push(seasonImpact);
+  factors.push(windImpact);
 
-  // --- 6. Site-specific modifiers ---
-  if (site) {
-    const siteImpact = calculateSiteModifier(site, input.rainfall);
-    vis += siteImpact.impact;
-    factors.push(siteImpact);
+  // --- 6. SST / EAC influence ---
+  const sstImpact = calculateSSTImpact(input.seaSurfaceTemp);
+  factors.push(sstImpact);
+
+  // --- 7. Cloud cover (light penetration) ---
+  if (input.cloud) {
+    const cloudImpact = calculateCloudImpact(input.cloud);
+    factors.push(cloudImpact);
   }
+
+  // --- Apply factors with diminishing returns on stacked penalties ---
+  // In reality, multiple negative factors don't fully compound — there's
+  // a floor to how bad vis can get from stacking. Apply full impact for
+  // the first 3m of penalties, then 50% for additional penalties.
+  // Positive factors always apply fully (good conditions genuinely help).
+  const nonBaselineFactors = factors.filter(f => f.name !== "Baseline");
+  const totalPositive = nonBaselineFactors
+    .filter(f => f.impact > 0)
+    .reduce((sum, f) => sum + f.impact, 0);
+  const totalNegativeRaw = nonBaselineFactors
+    .filter(f => f.impact < 0)
+    .reduce((sum, f) => sum + f.impact, 0); // negative number
+
+  // Diminishing returns: first -3m at full weight, then 35%.
+  // Multiple negative factors (rain + swell + wind) are partially correlated
+  // (SE wind creates SE swell which creates chop), so stacking them at full
+  // weight double-counts the impact. 35% excess rate prevents vis from
+  // collapsing to unrealistic lows (sub-1m) in merely bad conditions.
+  const FULL_PENALTY_LIMIT = -3;
+  let effectiveNegative: number;
+  if (totalNegativeRaw >= FULL_PENALTY_LIMIT) {
+    // Total penalties are mild (e.g. -2m) — apply fully
+    effectiveNegative = totalNegativeRaw;
+  } else {
+    // Apply first 3m at full weight, rest at 35%
+    const excess = totalNegativeRaw - FULL_PENALTY_LIMIT; // negative number
+    effectiveNegative = FULL_PENALTY_LIMIT + excess * 0.35;
+  }
+
+  let vis = baseline.value + totalPositive + effectiveNegative;
 
   // Clamp
   vis = Math.max(MIN_VIS, Math.min(MAX_VIS, vis));
   vis = Math.round(vis * 10) / 10;
 
-  // Confidence based on data quality
-  const confidence = determineConfidence(input);
+  // Confidence
+  const confidence = determineConfidence(input, factors);
 
   // Rating
   const rating = visRating(vis);
 
-  return { metres: vis, confidence, rating, factors };
+  // Build per-site explanation string
+  const wasDampened = totalNegativeRaw < FULL_PENALTY_LIMIT;
+  const explanation = buildExplanation(vis, baseline.value, factors, input.month, site, wasDampened);
+
+  return { metres: vis, confidence, rating, factors, explanation };
 }
 
-// --- Individual factor calculations ---
+// --- 1. Baseline with seasonal curve ---
 
-function calculateRainImpact(rainfall: RainfallData): VisibilityFactor {
-  // Heavy recent rain is the #1 vis killer
-  // 10mm+ in 24h = significant impact
-  // Effects linger 2-3 days
-
-  let impact = 0;
-  let description: string;
-
-  if (rainfall.last24h >= 20) {
-    impact = -5;
-    description = `Heavy rain last 24h (${rainfall.last24h}mm) — runoff will heavily reduce vis`;
-  } else if (rainfall.last24h >= 10) {
-    impact = -3.5;
-    description = `Moderate rain last 24h (${rainfall.last24h}mm) — significant runoff`;
-  } else if (rainfall.last24h >= 5) {
-    impact = -2;
-    description = `Light rain last 24h (${rainfall.last24h}mm) — some runoff`;
-  } else if (rainfall.last48h >= 15) {
-    impact = -2;
-    description = `Rain in last 48h (${rainfall.last48h}mm) — residual turbidity`;
-  } else if (rainfall.last72h >= 20) {
-    impact = -1;
-    description = `Rain in last 72h (${rainfall.last72h}mm) — some lingering effect`;
-  } else if (rainfall.daysSinceSignificantRain >= 5) {
-    impact = 2;
-    description = `${rainfall.daysSinceSignificantRain} days since significant rain — water has had time to clear`;
-  } else if (rainfall.daysSinceSignificantRain >= 3) {
-    impact = 1;
-    description = `${rainfall.daysSinceSignificantRain} days since rain — clearing`;
-  } else {
-    impact = 0;
-    description = "Moderate rain history — neutral effect";
+function calculateBaseline(
+  month: number,
+  site?: DiveSite
+): { value: number; factor: VisibilityFactor } {
+  if (!site) {
+    return {
+      value: FALLBACK_BASELINE,
+      factor: {
+        name: "Baseline",
+        impact: 0,
+        description: `General Northern Beaches baseline: ${FALLBACK_BASELINE}m`,
+      },
+    };
   }
 
-  return { name: "Rainfall", impact, description };
+  const monthIndex = month - 1; // 0-indexed
+  const seasonal = site.seasonalCurve[monthIndex];
+  const adjusted = Math.round(site.baselineVis * seasonal * 10) / 10;
+  const monthName = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  ][monthIndex];
+
+  const diff = adjusted - site.baselineVis;
+  const seasonNote =
+    Math.abs(diff) < 0.1
+      ? "average for this month"
+      : diff > 0
+        ? `better than average in ${monthName}`
+        : `worse than average in ${monthName}`;
+
+  return {
+    value: adjusted,
+    factor: {
+      name: "Baseline",
+      impact: 0, // baseline is the starting point, not a delta
+      description: `${site.name} baseline ${site.baselineVis}m, ${seasonNote} → ${adjusted}m`,
+    },
+  };
 }
 
-function calculateSwellImpact(swell: SwellReading): VisibilityFactor {
-  const { height, period } = swell;
+// --- 2. Dirty water memory (D-Memory) ---
+
+/**
+ * Calculate turbidity from rain history using a decay model.
+ *
+ * Instead of simple thresholds, this models a running turbidity score that:
+ * - Spikes with each rain event (proportional to amount)
+ * - Decays with a half-life of ~2 days in calm conditions
+ * - Decays SLOWER when swell is re-suspending sediment
+ * - Stacks: rain on already-turbid water is worse
+ * - Is site-specific via runoffSensitivity
+ */
+function calculateTurbidity(
+  rainfall: RainfallData,
+  swell: SwellReading,
+  site?: DiveSite
+): VisibilityFactor {
+  const sensitivity = site?.runoffSensitivity ?? 1.0;
+
+  // Reconstruct approximate turbidity from rainfall bins.
+  // We have 24h, 48h, 72h totals and days since significant rain.
+  // Model each "layer" of rain with appropriate decay.
+
+  // Rain in last 24h: freshest, minimal decay (0.5 day avg age)
+  const rain24h = rainfall.last24h;
+  // Rain in 24-48h window: ~1.5 day avg age
+  const rain24to48 = Math.max(0, rainfall.last48h - rainfall.last24h);
+  // Rain in 48-72h window: ~2.5 day avg age
+  const rain48to72 = Math.max(0, rainfall.last72h - rainfall.last48h);
+
+  // Swell slows decay: high swell re-suspends sediment.
+  // Effective half-life increases with swell energy.
+  const swellEnergy = swell.height * swell.height * swell.period;
+  const swellDecayFactor = 1 + Math.min(swellEnergy / 50, 1.5); // up to 2.5x slower decay
+  const effectiveHalfLife = TURBIDITY_HALF_LIFE_DAYS * swellDecayFactor;
+
+  // Decay function: amount * 2^(-age/halflife)
+  const decay = (amount: number, ageDays: number) =>
+    amount * Math.pow(2, -ageDays / effectiveHalfLife);
+
+  // Turbidity contributions from each rain layer
+  const turb24h = decay(rain24h, 0.5);
+  const turb24to48 = decay(rain24to48, 1.5);
+  const turb48to72 = decay(rain48to72, 2.5);
+
+  // Stacking factor: rain on dirty water is worse.
+  // If there's been sustained rain, turbidity compounds.
+  const totalTurbidity = turb24h + turb24to48 + turb48to72;
+  const stackingMultiplier = totalTurbidity > 15 ? 1.3 : totalTurbidity > 8 ? 1.15 : 1.0;
+
+  let rawTurbidity = totalTurbidity * stackingMultiplier * sensitivity;
+
+  // Convert turbidity score to vis impact (metres).
+  // Scale: 0 turbidity = no impact, 5 = -1m, 15 = -3m, 30+ = -5m
+  let impact: number;
+  let description: string;
+
+  if (rawTurbidity < 0.5) {
+    // Very dry — bonus for clean water, BUT suppressed when swell
+    // is re-suspending sediment. Dry weather doesn't help if the
+    // swell is churning the bottom — the water stays dirty regardless.
+    // Calibrated: energy ≥10 negates dry bonus entirely, 5-10 halves it.
+    const dryDays = rainfall.daysSinceSignificantRain;
+    let swellSuppression = 1.0;
+    if (swellEnergy >= 10) {
+      swellSuppression = 0; // swell keeping water dirty despite dry weather
+    } else if (swellEnergy >= 5) {
+      swellSuppression = 0.5;
+    }
+
+    if (dryDays >= 7) {
+      impact = 2 * swellSuppression;
+      description = swellSuppression < 1
+        ? `${dryDays} days dry but swell keeping water turbid`
+        : `${dryDays} days dry — water well cleared`;
+    } else if (dryDays >= 5) {
+      impact = 1.5 * swellSuppression;
+      description = swellSuppression < 1
+        ? `${dryDays} days dry but swell preventing full clearing`
+        : `${dryDays} days since significant rain — water has cleared`;
+    } else if (dryDays >= 3) {
+      impact = 0.5 * swellSuppression;
+      description = swellSuppression < 1
+        ? `${dryDays} days since rain — swell slowing clearing`
+        : `${dryDays} days since rain — still clearing`;
+    } else {
+      impact = 0;
+      description = "No significant recent rainfall";
+    }
+  } else {
+    // Turbid — penalty scales with turbidity score.
+    // 0.15 conversion: 7 turbidity units ≈ -1m, 20 units ≈ -3m, capped at -4.5m.
+    // Calibrated against Abyss data: moderate rain (5-10mm 48h) ≈ -1 to -2m vis.
+    impact = -Math.min(rawTurbidity * 0.15, 4.5);
+    impact = Math.round(impact * 10) / 10;
+
+    // Build descriptive explanation
+    const parts: string[] = [];
+    if (rain24h >= 1) parts.push(`${rain24h}mm in last 24h`);
+    if (rain24to48 >= 1) parts.push(`${rain24to48}mm 24-48h ago`);
+    if (rain48to72 >= 1) parts.push(`${rain48to72}mm 48-72h ago`);
+
+    const rainDesc = parts.length > 0 ? parts.join(", ") : "recent rain";
+    const siteNote = sensitivity > 1.2
+      ? ` — ${site?.name ?? "site"} is near a lagoon/creek, extra runoff impact`
+      : sensitivity < 0.6
+        ? ` — ${site?.name ?? "site"} is deep/offshore, less affected`
+        : "";
+
+    const swellNote = swellDecayFactor > 1.3
+      ? ". Swell is slowing the clearing process"
+      : "";
+
+    const stackNote = stackingMultiplier > 1
+      ? ". Multiple rain events stacking turbidity"
+      : "";
+
+    description = `Rain turbidity (${rainDesc})${siteNote}${swellNote}${stackNote}`;
+  }
+
+  return { name: "Rain Turbidity", impact, description };
+}
+
+// --- 2b. Swell-driven turbidity (regional) ---
+
+/**
+ * Persistent swell-driven turbidity — independent of rain.
+ *
+ * Even when a site is sheltered from direct swell, sustained swell
+ * re-suspends sediment across the entire coastal zone. This is a
+ * REGIONAL effect: it uses raw swell energy without site exposure
+ * reduction. The swellTrend acts as a proxy for persistence:
+ * "holding"/"building" = energy has been sustained for days → full
+ * turbidity; "dropping" = dissipating → reduced effect.
+ *
+ * Calibrated against Abyss data: 4 consecutive weeks of 2-5m vis
+ * despite dry weather when swell energy stayed 12-15 (Mar 2026).
+ */
+function calculateSwellTurbidity(
+  swell: SwellReading,
+  trend: VisibilityInput["swellTrend"]
+): VisibilityFactor {
+  const energy = swell.height * swell.height * swell.period;
+
+  // Trend multiplier: sustained swell = more accumulated turbidity
+  let trendMultiplier = 1.0;
+  if (trend === "building") trendMultiplier = 1.3;
+  else if (trend === "holding") trendMultiplier = 1.0;
+  else if (trend === "dropping") trendMultiplier = 0.5;
+
+  const effectiveEnergy = energy * trendMultiplier;
+
+  let impact: number;
+  let description: string;
+
+  if (effectiveEnergy < 5) {
+    impact = 0;
+    description = "Low swell energy — no persistent coastal turbidity";
+  } else if (effectiveEnergy < 8) {
+    impact = -0.5;
+    description = `Moderate swell energy (${Math.round(energy)}) stirring coastal sediment`;
+  } else if (effectiveEnergy < 15) {
+    impact = -2.5;
+    description = `Sustained swell energy (${Math.round(energy)}) keeping coastal water turbid`;
+  } else if (effectiveEnergy < 25) {
+    impact = -3;
+    description = `High swell energy (${Math.round(energy)}) — persistent coastal turbidity`;
+  } else {
+    impact = -3.5;
+    description = `Very high swell energy (${Math.round(energy)}) — coastal water heavily churned`;
+  }
+
+  // Trend context
+  if (trend === "building" && impact < 0) {
+    description += ". Swell building — turbidity worsening";
+  } else if (trend === "holding" && impact < 0) {
+    description += ". Swell holding — no sign of clearing";
+  } else if (trend === "dropping" && impact < 0) {
+    description += ". Swell dropping — should start clearing";
+  }
+
+  return { name: "Swell Turbidity", impact, description };
+}
+
+// --- 3. Swell energy ---
+
+/**
+ * Calculate vis impact from swell energy, not just height.
+ * Energy = height² × period. A 1m@12s swell has way more energy
+ * than 1m@6s. Factor in site exposure to swell direction.
+ */
+function calculateSwellEnergy(
+  swell: SwellReading,
+  trend: VisibilityInput["swellTrend"],
+  site?: DiveSite
+): VisibilityFactor {
+  const { height, period, direction } = swell;
+  const energy = height * height * period;
   const swellType = classifySwellType(period);
 
-  let impact = 0;
-  let description: string;
+  // Determine site exposure factor
+  let exposureFactor = 1.0;
+  let exposureNote = "";
+  if (site) {
+    const dir = normaliseDirection(direction);
+    const protectedDirs = site.bestConditions.swellDirectionProtected;
+    const exposedDirs = site.exposure;
 
-  // Big swell stirs up sediment, especially short-period wind chop
-  if (height >= 2.5) {
-    // Big swell regardless of type
-    impact = swellType === "wind-chop" ? -4 : -2.5;
-    description = `Large ${height}m ${swellType} — stirring up the bottom significantly`;
-  } else if (height >= 1.5) {
-    impact = swellType === "wind-chop" ? -2.5 : -1;
-    description = `${height}m ${swellType} — moderate bottom disturbance`;
-  } else if (height >= 1.0) {
-    impact = swellType === "wind-chop" ? -1 : 0;
-    description =
-      swellType === "wind-chop"
-        ? `${height}m wind chop — some surface disturbance`
-        : `${height}m ${swellType} — manageable`;
-  } else if (height < 0.5) {
-    impact = 1.5;
-    description = `Small ${height}m swell — minimal disturbance, vis improving`;
-  } else {
-    impact = 0.5;
-    description = `Light ${height}m swell — good conditions`;
+    if (isDirectionInList(dir, protectedDirs)) {
+      exposureFactor = 0.3; // sheltered — only 30% of swell energy reaches site
+      exposureNote = ` — ${site.name} is sheltered from ${direction}`;
+    } else if (isDirectionInList(dir, exposedDirs)) {
+      exposureFactor = 1.2; // fully exposed, slight extra
+      exposureNote = ` — ${site.name} is directly exposed to ${direction}`;
+    } else {
+      exposureFactor = 0.7; // partial shelter
+      exposureNote = ` — ${site.name} is partially sheltered from ${direction}`;
+    }
   }
 
-  return { name: "Swell", impact, description };
+  const effectiveEnergy = energy * exposureFactor;
+
+  // Map effective energy to vis impact.
+  // Energy thresholds (height² × period × exposure):
+  //   <3  = negligible (calm)
+  //   3-8 = minor
+  //   8-14 = moderate (split from old 8-20 — steeper penalties)
+  //   14-30 = strong
+  //   30-50 = significant
+  //   50+ = severe
+  // Calibrated Mar 2026: 0.9m@15.4s (energy 12.5) and 1.4m@7.7s (energy 15.1)
+  // should produce similar moderate-to-strong impact.
+  let impact: number;
+  let description: string;
+
+  if (effectiveEnergy < 3) {
+    impact = 0.5;
+    description = `Very calm ${height}m swell at ${period}s${exposureNote}`;
+  } else if (effectiveEnergy < 8) {
+    impact = -0.5;
+    description = `Light ${height}m ${swellType} (${period}s, energy ${Math.round(energy)})${exposureNote}`;
+  } else if (effectiveEnergy < 14) {
+    impact = -1.5;
+    description = `Moderate ${height}m ${swellType} (${period}s, energy ${Math.round(energy)})${exposureNote}`;
+  } else if (effectiveEnergy < 30) {
+    impact = -2.5;
+    description = `Strong ${height}m ${swellType} (${period}s, energy ${Math.round(energy)}) — significant bottom disturbance${exposureNote}`;
+  } else if (effectiveEnergy < 50) {
+    impact = -3.5;
+    description = `Heavy ${height}m ${swellType} (${period}s, energy ${Math.round(energy)}) — severe bottom disturbance${exposureNote}`;
+  } else {
+    impact = -4;
+    description = `Extreme ${height}m ${swellType} (${period}s, energy ${Math.round(energy)}) — severe turbidity${exposureNote}`;
+  }
+
+  // Trend modifier
+  if (trend === "building") {
+    impact -= 0.5;
+    description += ". Swell building — water already churning";
+  } else if (trend === "dropping") {
+    impact += 0.5;
+    description += ". Swell dropping — conditions improving";
+  }
+
+  return { name: "Swell Energy", impact, description };
 }
 
-function calculateWindImpact(
+// --- 4. Six-phase tidal model ---
+
+/**
+ * Model vis impact from six tidal phases:
+ * - low_slack:     worst — sediment settled, about to stir
+ * - early_rising:  improving — clean water starting to push in
+ * - mid_rising:    good — clean ocean water actively pushing in
+ * - high_slack:    best — deepest, calmest, cleanest water
+ * - early_falling: still OK — water starting to recede
+ * - mid_falling:   deteriorating — dirty water pulling out from lagoons/estuaries
+ */
+function calculateTidePhaseImpact(tides: TideData): VisibilityFactor {
+  let impact: number;
+  let description: string;
+
+  switch (tides.currentState) {
+    case "low_slack":
+      impact = -1.5;
+      description = "Low tide slack — shallowest water, sediment about to stir, worst for vis";
+      break;
+    case "early_rising":
+      impact = -0.3;
+      description = "Early rising tide — clean water starting to push in, vis improving";
+      break;
+    case "mid_rising":
+      impact = 0.8;
+      description = "Mid rising tide — clean ocean water actively pushing inshore, good for vis";
+      break;
+    case "high_slack":
+      impact = 1.0;
+      description = "High tide slack — deepest, calmest water, best vis conditions";
+      break;
+    case "early_falling":
+      impact = 0.3;
+      description = "Early falling tide — still decent, water starting to recede";
+      break;
+    case "mid_falling":
+      impact = -0.8;
+      description = "Mid falling tide — lagoon/estuary outflow pulling dirty water across reefs";
+      break;
+    default:
+      impact = 0;
+      description = `Tide state "${tides.currentState}" — neutral impact`;
+      break;
+  }
+
+  return { name: "Tide Phase", impact, description };
+}
+
+// --- 5. Wind surface mixing (depth-based) ---
+
+/**
+ * In shallow sites (<10m), onshore wind above 15kts causes significant
+ * surface mixing and sediment suspension. Deep sites are less affected.
+ * Uses site's windSensitivity factor.
+ */
+function calculateWindMixing(
   direction: string,
-  speed: number
+  speed: number,
+  site?: DiveSite
 ): VisibilityFactor {
-  // Offshore wind (W/NW/SW) flattens the surface and pushes surface water out
-  // bringing cleaner water up from below. Onshore (E/NE/SE) does the opposite.
-  const offshore = ["W", "WSW", "SW", "WNW", "NW", "NNW"];
-  const onshore = ["E", "ESE", "SE", "NE", "ENE", "SSE"];
+  const sensitivity = site?.windSensitivity ?? 1.0;
+
+  const offshore = ["W", "WSW", "SW", "SSW", "WNW", "NW", "NNW"];
+  const onshore = ["E", "ESE", "SE", "SSE", "NE", "ENE"];
 
   let impact = 0;
   let description: string;
 
   if (speed < 5) {
     impact = 0.5;
-    description = "Very light wind — calm surface conditions";
+    description = "Very light wind — calm, glassy surface";
   } else if (offshore.includes(direction)) {
-    if (speed >= 15) {
-      impact = 2;
-      description = `Strong offshore ${direction} ${speed}kt — pushing surface layer out, cleaner water upwelling`;
+    if (speed >= 20) {
+      impact = 0.5;
+      description = `Strong offshore ${direction} ${speed}kt — surface clean but very windy`;
+    } else if (speed >= 10) {
+      impact = 1;
+      description = `Moderate offshore ${direction} ${speed}kt — flattening surface, helping vis`;
     } else {
-      impact = 1.5;
-      description = `Offshore ${direction} ${speed}kt — flattening surface, improving vis`;
+      impact = 0.5;
+      description = `Light offshore ${direction} ${speed}kt — slightly improving conditions`;
     }
   } else if (onshore.includes(direction)) {
-    if (speed >= 15) {
-      impact = -2;
-      description = `Strong onshore ${direction} ${speed}kt — pushing turbid water inshore`;
+    // Onshore impact scaled by wind sensitivity (depth-based).
+    // Calibrated: 10kt onshore ≈ -1m at normal sensitivity,
+    // 15kt ≈ -1.5m, 20kt+ ≈ -2.5m. Shallow sites scale up.
+    if (speed >= 20) {
+      impact = -2.5 * sensitivity;
+      description = `Strong onshore ${direction} ${speed}kt — heavy surface mixing`;
+    } else if (speed >= 15) {
+      impact = -1.5 * sensitivity;
+      description = `Moderate-strong onshore ${direction} ${speed}kt — significant surface mixing`;
+    } else if (speed >= 10) {
+      impact = -1 * sensitivity;
+      description = `Moderate onshore ${direction} ${speed}kt — chop and turbidity`;
     } else {
-      impact = -1;
-      description = `Onshore ${direction} ${speed}kt — some surface chop and turbidity`;
+      impact = -0.5 * sensitivity;
+      description = `Light onshore ${direction} ${speed}kt — some surface disturbance`;
+    }
+
+    if (sensitivity > 1.1) {
+      description += ` (shallow site — extra wind-sensitive)`;
+    } else if (sensitivity < 0.7) {
+      description += ` (deep site — less affected by surface wind)`;
     }
   } else {
-    // N or S — cross shore
-    impact = speed >= 15 ? -0.5 : 0;
-    description = `Cross-shore ${direction} ${speed}kt — minimal vis effect`;
+    // Cross-shore (N or S)
+    if (speed >= 20) {
+      impact = -1.2 * sensitivity;
+      description = `Strong ${direction} ${speed}kt — cross-shore creating significant chop`;
+    } else if (speed >= 10) {
+      impact = -0.4 * sensitivity;
+      description = `Moderate ${direction} ${speed}kt — some surface disturbance`;
+    } else {
+      impact = 0;
+      description = `Light ${direction} ${speed}kt — minimal vis effect`;
+    }
   }
 
+  impact = Math.round(impact * 10) / 10;
   return { name: "Wind", impact, description };
 }
 
-function calculateTideImpact(tides: TideData): VisibilityFactor {
-  // Rising tide generally brings cleaner ocean water inshore
-  // Falling tide pulls dirty lagoon/estuary water out through reefs
-  let impact = 0;
-  let description: string;
+// --- 6. SST / EAC ---
 
-  switch (tides.currentState) {
-    case "rising":
-      impact = 1;
-      description = "Rising tide — cleaner ocean water pushing inshore";
-      break;
-    case "high_slack":
-      impact = 0.5;
-      description = "High tide slack — water has settled, reasonable vis";
-      break;
-    case "falling":
-      impact = -0.5;
-      description =
-        "Falling tide — estuary/lagoon outflow can bring dirty water";
-      break;
-    case "low_slack":
-      impact = -0.5;
-      description = "Low tide slack — shallower water, more disturbance";
-      break;
+function calculateSSTImpact(sst: number | null): VisibilityFactor {
+  if (sst === null) {
+    return { name: "SST", impact: 0, description: "Sea surface temp unavailable" };
   }
 
-  return { name: "Tide", impact, description };
-}
-
-function calculateSeasonImpact(
-  month: number,
-  sst: number | null
-): VisibilityFactor {
-  // Summer (Dec-Mar): EAC pushes warm clear water south
-  // Winter (Jun-Aug): Cooler, often clearer after calm spells
-  // Autumn (Apr-May): Transitional, can be excellent
-  // Spring (Sep-Nov): Often poorest — plankton blooms, variable
-
-  let impact = 0;
+  let impact: number;
   let description: string;
 
-  // Check if EAC influence is present (warm water = clear blue water)
-  if (sst !== null && sst >= 23) {
-    impact = 2;
-    description = `Warm SST ${sst}°C suggests EAC influence — likely blue, clear water`;
-  } else if (sst !== null && sst >= 21) {
-    impact = 1;
-    description = `Warm SST ${sst}°C — reasonable clarity`;
-  } else if ([12, 1, 2, 3].includes(month)) {
-    impact = 1;
-    description = "Summer — typically better vis with EAC influence";
-  } else if ([4, 5].includes(month)) {
+  if (sst >= 23) {
     impact = 1.5;
-    description =
-      "Autumn — often the best vis of the year, warm water lingers";
-  } else if ([6, 7, 8].includes(month)) {
-    impact = 0;
-    description =
-      "Winter — variable vis, can be excellent on calm days";
+    description = `Warm SST ${sst}°C — EAC influence likely, clearer blue water`;
+  } else if (sst >= 22) {
+    impact = 0.5;
+    description = `SST ${sst}°C — warm, moderate water clarity`;
+  } else if (sst < 18) {
+    impact = -0.5;
+    description = `Cool SST ${sst}°C — cooler water often carries more plankton`;
   } else {
-    // Spring (Sep-Nov)
-    impact = -1;
-    description =
-      "Spring — plankton blooms common, vis can be unpredictable";
+    impact = 0;
+    description = `SST ${sst}°C — neutral`;
   }
 
-  return { name: "Season", impact, description };
+  return { name: "SST", impact, description };
 }
 
-function calculateSiteModifier(
-  site: DiveSite,
-  rainfall: RainfallData
-): VisibilityFactor {
-  let impact = 0;
+// --- 7. Cloud cover ---
+
+/**
+ * Parse BOM cloud description into an oktas-style 0-8 scale.
+ */
+export function parseCloudCover(cloud: string): number {
+  const lower = cloud.toLowerCase().trim();
+  if (!lower || lower === "clear" || lower === "sunny") return 0;
+  if (lower === "mostly sunny" || lower === "mostly clear") return 2;
+  if (lower === "partly cloudy" || lower === "partly sunny") return 4;
+  if (lower === "mostly cloudy") return 6;
+  if (lower === "cloudy" || lower === "overcast") return 8;
+  if (lower.includes("shower") || lower.includes("rain") || lower.includes("storm")) return 8;
+  const num = parseInt(lower);
+  if (!isNaN(num) && num >= 0 && num <= 8) return num;
+  return 4; // unknown — assume partial
+}
+
+function calculateCloudImpact(cloud: string): VisibilityFactor {
+  const oktas = parseCloudCover(cloud);
+
+  let impact: number;
   let description: string;
 
-  // Sites near lagoons/estuaries are more affected by rain
-  const nearEstuary =
-    site.id === "dee-why-head" || // Dee Why Lagoon
-    site.id === "narrabeen-head"; // Narrabeen Lagoon
-
-  if (nearEstuary && rainfall.last48h >= 10) {
-    impact = -1.5;
-    description = `${site.name} is near a lagoon — rain runoff has extra vis impact here`;
-  } else if (nearEstuary && rainfall.last48h >= 5) {
+  if (oktas >= 7) {
     impact = -0.5;
-    description = `${site.name} near lagoon — some extra turbidity from runoff`;
-  } else if (site.id === "north-head") {
-    // North Head is deeper and more exposed to clean ocean water
-    impact = 1;
-    description = "North Head — deeper water often means better vis";
-  } else if (site.id === "long-reef") {
-    // Long Reef shallow platform — vis varies a lot
-    impact = -0.5;
-    description =
-      "Long Reef — shallow platform means vis is more variable";
+    description = `Overcast skies (${cloud}) — reduced light penetration, harder to see underwater`;
+  } else if (oktas >= 5) {
+    impact = -0.3;
+    description = `Mostly cloudy (${cloud}) — less light reaching the water`;
+  } else if (oktas <= 2) {
+    impact = 0.5;
+    description = `Clear skies (${cloud}) — good light penetration underwater`;
   } else {
     impact = 0;
-    description = `${site.name} — no significant site-specific modifier`;
+    description = `Partly cloudy (${cloud}) — moderate light conditions`;
   }
 
-  return { name: "Site", impact, description };
+  return { name: "Cloud Cover", impact, description };
+}
+
+// --- Confidence scoring ---
+
+/**
+ * Confidence is based on:
+ * - High: stable conditions, good data, factors mostly agree
+ * - Medium: partial data or mild conflicting signals
+ * - Low: multiple competing factors, hard to predict
+ */
+function determineConfidence(
+  input: VisibilityInput,
+  factors: VisibilityFactor[]
+): VisibilityEstimate["confidence"] {
+  let score = 0;
+
+  // Data quality
+  if (input.seaSurfaceTemp !== null) score += 2;
+  if (input.rainfall.last24h !== undefined) score += 1;
+  if (input.swell.period > 0) score += 1;
+
+  // Factor agreement: count how many factors push in the same direction.
+  // If factors conflict heavily, confidence drops.
+  const significantFactors = factors.filter(f => f.name !== "Baseline" && Math.abs(f.impact) >= 0.5);
+  const positive = significantFactors.filter(f => f.impact > 0).length;
+  const negative = significantFactors.filter(f => f.impact < 0).length;
+  const total = positive + negative;
+
+  if (total > 0) {
+    const agreement = Math.abs(positive - negative) / total;
+    if (agreement >= 0.6) score += 2; // factors mostly agree
+    else if (agreement >= 0.3) score += 1; // mixed
+    // else: competing factors, no bonus
+  }
+
+  // Specific conflict scenarios that reduce confidence
+  const rainImpact = factors.find(f => f.name === "Rain Turbidity");
+  const swellImpact = factors.find(f => f.name === "Swell Energy");
+  const tideImpact = factors.find(f => f.name === "Tide Phase");
+
+  // Rain clearing but swell re-suspending = hard to predict
+  if (rainImpact && swellImpact &&
+      rainImpact.impact < -1 && swellImpact.impact < -1) {
+    score -= 1; // double negative = harder to predict exact vis
+  }
+
+  // Tide improving but rain hurting = competing
+  if (tideImpact && rainImpact &&
+      tideImpact.impact > 0.5 && rainImpact.impact < -1) {
+    score -= 1;
+  }
+
+  if (score >= 5) return "high";
+  if (score >= 3) return "medium";
+  return "low";
+}
+
+// --- Explanation builder ---
+
+/**
+ * Build a human-readable per-site explanation like:
+ * "Vis at Freshwater: ~5m (site baseline 7m in Feb, -2m from Tuesday's rain still clearing,
+ *  +1m from rising tide, -1m from 1.1m SE swell hitting exposed reef)"
+ */
+function buildExplanation(
+  finalVis: number,
+  baselineVis: number,
+  factors: VisibilityFactor[],
+  month: number,
+  site?: DiveSite,
+  wasDampened?: boolean
+): string {
+  const siteName = site?.name ?? "General";
+  const monthName = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  ][month - 1];
+
+  // Collect significant modifiers (skip baseline, skip negligible impacts)
+  const modifiers = factors
+    .filter(f => f.name !== "Baseline" && Math.abs(f.impact) >= 0.3)
+    .map(f => {
+      const sign = f.impact > 0 ? "+" : "";
+      return `${sign}${f.impact}m ${f.name.toLowerCase()}`;
+    });
+
+  const baseDesc = `site baseline ${baselineVis}m in ${monthName}`;
+  const modStr = modifiers.length > 0 ? `, ${modifiers.join(", ")}` : "";
+  const dampenNote = wasDampened ? " [penalties dampened — diminishing returns]" : "";
+
+  return `Vis at ${siteName}: ~${finalVis}m (${baseDesc}${modStr})${dampenNote}`;
 }
 
 // --- Helpers ---
 
-function determineConfidence(input: VisibilityInput): VisibilityEstimate["confidence"] {
-  // Higher confidence when we have SST data and recent observations
-  if (input.seaSurfaceTemp !== null && input.rainfall.last24h !== undefined) {
-    return "high";
-  }
-  if (input.seaSurfaceTemp !== null || input.rainfall.last24h !== undefined) {
-    return "medium";
-  }
-  return "low";
-}
-
 function visRating(metres: number): VisibilityEstimate["rating"] {
-  if (metres >= 12) return "excellent";
-  if (metres >= 8) return "good";
-  if (metres >= 5) return "fair";
-  if (metres >= 2) return "poor";
+  if (metres >= 8) return "excellent";
+  if (metres >= 5) return "good";
+  if (metres >= 3) return "fair";
+  if (metres >= 1.5) return "poor";
   return "terrible";
 }
 
 /**
+ * Normalise compass direction to primary 8-point (N, NE, E, SE, S, SW, W, NW).
+ */
+function normaliseDirection(dir: string): string {
+  const map: Record<string, string> = {
+    N: "N", NNE: "NE", NE: "NE", ENE: "E",
+    E: "E", ESE: "SE", SE: "SE", SSE: "S",
+    S: "S", SSW: "SW", SW: "SW", WSW: "W",
+    W: "W", WNW: "NW", NW: "NW", NNW: "N",
+  };
+  return map[dir] ?? dir;
+}
+
+function isDirectionInList(dir: string, list: string[]): boolean {
+  return list.some((d) => normaliseDirection(d) === dir);
+}
+
+/**
  * Get a current strength estimate from swell and tide.
- * Bigger swell + tidal movement = stronger current.
  */
 export function estimateCurrentStrength(
   swellHeight: number,
   tideState: TideData["currentState"]
 ): "none" | "light" | "moderate" | "strong" {
-  const tideFlow =
-    tideState === "rising" || tideState === "falling" ? 1 : 0;
+  const flowingStates: TideData["currentState"][] = [
+    "early_rising", "mid_rising", "early_falling", "mid_falling",
+  ];
+  const tideFlow = flowingStates.includes(tideState) ? 1 : 0;
   const swellContribution = swellHeight >= 2 ? 2 : swellHeight >= 1 ? 1 : 0;
   const total = tideFlow + swellContribution;
 

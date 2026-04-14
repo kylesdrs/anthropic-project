@@ -4,6 +4,7 @@ import { fetchWeatherData } from "../../../data/bom";
 import { fetchSwellData } from "../../../data/swell";
 import { fetchSharkActivity } from "../../../data/sharksmart";
 import { rankSites } from "../../../engine/site-rank";
+import { getTimeOfDay } from "../../../utils/sydney-time";
 
 /**
  * GET /api/sites
@@ -29,20 +30,16 @@ export async function GET() {
       });
     }
 
-    // Determine current time of day
-    const hour = new Date().getHours();
-    let timeOfDay: "dawn" | "morning" | "midday" | "afternoon" | "dusk";
-    if (hour < 6) timeOfDay = "dawn";
-    else if (hour < 10) timeOfDay = "morning";
-    else if (hour < 14) timeOfDay = "midday";
-    else if (hour < 17) timeOfDay = "afternoon";
-    else timeOfDay = "dusk";
+    // Determine current time of day in Sydney timezone
+    const timeOfDay = getTimeOfDay();
 
+    const hasRealSharkData = sharkActivity.source === "live" || sharkActivity.source === "local";
     const rankings = rankSites(northernBeachesSites, {
       weather,
       swell,
       sharkActivity,
       timeOfDay,
+      hasRealSharkData,
     });
 
     return NextResponse.json({
@@ -50,10 +47,9 @@ export async function GET() {
       fetchedAt: new Date().toISOString(),
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unknown error";
+    console.error("Sites fetch failed:", error);
     return NextResponse.json(
-      { error: "Failed to fetch sites", detail: message },
+      { error: "Failed to fetch sites" },
       { status: 500 }
     );
   }
