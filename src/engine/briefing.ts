@@ -22,7 +22,11 @@ import {
 import { northernBeachesSites, type DiveSite } from "../sites/northern-beaches";
 import { rankSites, type SiteRanking } from "./site-rank";
 import type { VisibilityEstimate } from "./visibility";
-import { estimateVisibility } from "./visibility";
+import { estimateVisibility, estimateCurrentStrength } from "./visibility";
+import {
+  calculateKingfishConditions,
+  type KingfishConditions,
+} from "./kingfish";
 import { fetchOpenMeteo5Day } from "../data/open-meteo";
 import { generate5DayOutlook, type FiveDayOutlook, type OutlookDay } from "./outlook";
 import {
@@ -54,6 +58,7 @@ export interface DiveBriefing {
   };
   visibility: VisibilityEstimate | null;
   siteRankings: SiteRanking[];
+  kingfish: KingfishConditions | null;
   recommendation: BriefingRecommendation;
   outlook: FiveDayOutlook | null;
 }
@@ -193,6 +198,37 @@ export async function generateBriefing(options?: {
       : visibility
     : visibility;
 
+  // Kingfish conditions model
+  let kingfish: KingfishConditions | null = null;
+  if (weather && swell) {
+    const month = new Date().getMonth() + 1;
+    const currentStrength = estimateCurrentStrength(
+      swell.current.height,
+      weather.tides.currentState
+    );
+    const siteVisMap = new Map<string, number>();
+    for (const r of siteRankings) {
+      siteVisMap.set(r.site.id, r.visibility.metres);
+    }
+    kingfish = calculateKingfishConditions(
+      {
+        month,
+        sst: weather.seaSurfaceTemp,
+        waterTemp: weather.seaSurfaceTemp ?? 21,
+        estimatedVis: visibility?.metres ?? 5,
+        currentStrength,
+        tideState: weather.tides.currentState,
+        windDirection: weather.observation.windDirection,
+        windSpeed: weather.observation.windSpeed,
+        pressure: weather.observation.pressure,
+        timeOfDay,
+        hour: forecastHour ?? getSydneyHour(),
+      },
+      sites,
+      siteVisMap
+    );
+  }
+
   // Generate 5-day outlook (needed before recommendation for forward-looking advice)
   const outlook = generate5DayOutlook(swell, omData, selectedSite, weather?.rainfall);
 
@@ -219,6 +255,7 @@ export async function generateBriefing(options?: {
     },
     visibility: activeVisibility,
     siteRankings,
+    kingfish,
     recommendation,
     outlook,
   };
