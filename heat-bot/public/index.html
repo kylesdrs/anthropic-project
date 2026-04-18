@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Heat Quote Bot</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --surface: #12121a;
+      --surface2: #1a1a28;
+      --border: #2a2a3a;
+      --accent: #c8a84b;
+      --accent-dim: #7a6530;
+      --text: #d0cfc8;
+      --text-dim: #6a6a78;
+      --red: #c0392b;
+      --green: #27ae60;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Courier New', Courier, monospace;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo {
+      font-size: 22px;
+      font-weight: bold;
+      letter-spacing: 6px;
+      color: var(--accent);
+      text-transform: uppercase;
+    }
+
+    .logo span {
+      color: var(--text-dim);
+      font-size: 11px;
+      letter-spacing: 2px;
+      display: block;
+      margin-top: 2px;
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      letter-spacing: 1px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--red);
+      transition: background 0.3s;
+    }
+
+    .status-dot.connected { background: var(--green); }
+
+    main {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 32px 20px;
+    }
+
+    /* QR Panel */
+    #qr-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      padding: 48px 32px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      margin-bottom: 32px;
+    }
+
+    #qr-panel.hidden { display: none; }
+
+    #qr-panel h2 {
+      color: var(--accent);
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      font-size: 14px;
+    }
+
+    #qr-panel p {
+      color: var(--text-dim);
+      font-size: 13px;
+      text-align: center;
+      max-width: 340px;
+      line-height: 1.7;
+    }
+
+    #qr-image {
+      border: 3px solid var(--accent);
+      border-radius: 4px;
+      background: #fff;
+      padding: 8px;
+    }
+
+    /* Empty state */
+    #empty-state {
+      text-align: center;
+      padding: 64px 32px;
+      color: var(--text-dim);
+    }
+
+    #empty-state .tagline {
+      font-size: 13px;
+      letter-spacing: 2px;
+      margin-bottom: 12px;
+      color: var(--accent-dim);
+      text-transform: uppercase;
+    }
+
+    #empty-state .quote {
+      font-style: italic;
+      font-size: 15px;
+      color: var(--text-dim);
+      max-width: 500px;
+      margin: 0 auto;
+      line-height: 1.8;
+    }
+
+    /* Message cards */
+    .message-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      margin-bottom: 20px;
+      overflow: hidden;
+      animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .message-card.replied {
+      border-color: var(--accent-dim);
+      opacity: 0.7;
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .card-from {
+      font-size: 12px;
+      color: var(--accent);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .card-time {
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    .card-body {
+      padding: 16px;
+    }
+
+    .card-message {
+      font-size: 15px;
+      color: var(--text);
+      line-height: 1.6;
+      margin-bottom: 16px;
+      border-left: 3px solid var(--border);
+      padding-left: 12px;
+    }
+
+    .card-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn {
+      padding: 8px 18px;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      background: transparent;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 12px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn:hover { border-color: var(--accent); color: var(--accent); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-generate {
+      border-color: var(--accent-dim);
+      color: var(--accent);
+    }
+
+    .btn-generate:hover {
+      background: var(--accent);
+      color: var(--bg);
+    }
+
+    .btn-send {
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    .btn-send:hover {
+      background: var(--green);
+      color: var(--bg);
+    }
+
+    /* Quote block */
+    .quote-block {
+      margin-top: 16px;
+      padding: 16px;
+      background: var(--bg);
+      border: 1px solid var(--accent-dim);
+      border-radius: 3px;
+      animation: fadeIn 0.4s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .quote-text {
+      font-size: 15px;
+      font-style: italic;
+      color: var(--accent);
+      line-height: 1.8;
+      margin-bottom: 8px;
+    }
+
+    .quote-meta {
+      font-size: 11px;
+      color: var(--text-dim);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .quote-why {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--text-dim);
+      font-style: normal;
+      border-top: 1px solid var(--border);
+      padding-top: 10px;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid var(--accent-dim);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .replied-badge {
+      display: inline-block;
+      font-size: 11px;
+      color: var(--green);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      border: 1px solid var(--green);
+      padding: 3px 10px;
+      border-radius: 20px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    HEAT
+    <span>WhatsApp Quote Bot</span>
+  </div>
+  <div class="status-pill">
+    <div class="status-dot" id="status-dot"></div>
+    <span id="status-text">Connecting...</span>
+  </div>
+</header>
+
+<main>
+  <div id="qr-panel">
+    <h2>Scan to Connect</h2>
+    <p>Open WhatsApp on your phone → Menu → Linked Devices → Link a Device</p>
+    <img id="qr-image" width="220" height="220" alt="QR Code loading..." />
+    <p style="font-size:11px">Waiting for QR code from server...</p>
+  </div>
+
+  <div id="messages-container">
+    <div id="empty-state">
+      <div class="tagline">Waiting for messages</div>
+      <div class="quote">
+        "Don't let yourself get attached to anything you are not willing to<br>
+        walk out on in 30 seconds flat if you feel the heat around the corner."
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+  const socket = io();
+  const statusDot = document.getElementById('status-dot');
+  const statusText = document.getElementById('status-text');
+  const qrPanel = document.getElementById('qr-panel');
+  const qrImage = document.getElementById('qr-image');
+  const messagesContainer = document.getElementById('messages-container');
+  const emptyState = document.getElementById('empty-state');
+
+  socket.on('qr', (dataUrl) => {
+    qrPanel.classList.remove('hidden');
+    qrImage.src = dataUrl;
+  });
+
+  socket.on('status', ({ connected }) => {
+    statusDot.className = 'status-dot' + (connected ? ' connected' : '');
+    statusText.textContent = connected ? 'Connected' : 'Disconnected';
+    if (connected) qrPanel.classList.add('hidden');
+  });
+
+  socket.on('message', (meta) => {
+    emptyState.style.display = 'none';
+    renderMessage(meta);
+  });
+
+  socket.on('replied', ({ messageId }) => {
+    const card = document.getElementById(`card-${messageId}`);
+    if (card) card.classList.add('replied');
+  });
+
+  function renderMessage(meta) {
+    const card = document.createElement('div');
+    card.className = 'message-card';
+    card.id = `card-${meta.id}`;
+
+    const time = new Date(meta.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    card.innerHTML = `
+      <div class="card-header">
+        <span class="card-from">${escHtml(meta.from)}</span>
+        <span class="card-time">${time}</span>
+      </div>
+      <div class="card-body">
+        <div class="card-message">${escHtml(meta.body)}</div>
+        <div class="card-actions">
+          <button class="btn btn-generate" onclick="generateQuote('${meta.id}', this)">
+            Get Heat Quote
+          </button>
+        </div>
+        <div class="quote-block" id="quote-${meta.id}" style="display:none"></div>
+      </div>
+    `;
+
+    messagesContainer.insertBefore(card, messagesContainer.firstChild);
+  }
+
+  async function generateQuote(messageId, btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Thinking...';
+
+    try {
+      const res = await fetch(`/api/generate-quote?messageId=${encodeURIComponent(messageId)}`);
+      const data = await res.json();
+
+      if (data.error) throw new Error(data.error);
+
+      const quoteBlock = document.getElementById(`quote-${messageId}`);
+      quoteBlock.style.display = 'block';
+      quoteBlock.innerHTML = `
+        <div class="quote-text">"${escHtml(data.quote)}"</div>
+        <div class="quote-meta">— ${escHtml(data.character)}, Heat (1995)</div>
+        ${data.why ? `<div class="quote-why">🎬 ${escHtml(data.why)}</div>` : ''}
+        <div style="margin-top:14px; display:flex; gap:10px; align-items:center">
+          <button class="btn btn-send" onclick="sendReply('${messageId}', this, ${JSON.stringify(data.quote).replace(/'/g,"&#39;")}, ${JSON.stringify(data.character).replace(/'/g,"&#39;")})">
+            Send This Reply
+          </button>
+          <button class="btn btn-generate" onclick="generateQuote('${messageId}', this)">
+            Try Another
+          </button>
+        </div>
+      `;
+
+      btn.remove();
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = 'Get Heat Quote';
+      alert('Failed to generate quote: ' + err.message);
+    }
+  }
+
+  async function sendReply(messageId, btn, quote, character) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Sending...';
+
+    try {
+      const res = await fetch('/api/send-reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messageId, quote, character }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      const quoteBlock = document.getElementById(`quote-${messageId}`);
+      const actionsDiv = quoteBlock.querySelector('div[style]');
+      if (actionsDiv) actionsDiv.innerHTML = '<span class="replied-badge">✓ Sent</span>';
+
+      document.getElementById(`card-${messageId}`)?.classList.add('replied');
+    } catch (err) {
+      btn.disabled = false;
+      btn.textContent = 'Send This Reply';
+      alert('Failed to send: ' + err.message);
+    }
+  }
+
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+</script>
+</body>
+</html>
