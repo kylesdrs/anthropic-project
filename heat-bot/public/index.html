@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <title>Heat Quote Bot</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
@@ -19,19 +19,20 @@
       --green: #27ae60;
     }
 
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
     body {
       background: var(--bg);
       color: var(--text);
       font-family: 'Courier New', Courier, monospace;
       min-height: 100vh;
+      min-height: 100dvh;
     }
 
     header {
       background: var(--surface);
       border-bottom: 1px solid var(--border);
-      padding: 16px 32px;
+      padding: 14px 16px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -41,17 +42,16 @@
     }
 
     .logo {
-      font-size: 22px;
+      font-size: 20px;
       font-weight: bold;
-      letter-spacing: 6px;
+      letter-spacing: 5px;
       color: var(--accent);
-      text-transform: uppercase;
     }
 
     .logo span {
       color: var(--text-dim);
-      font-size: 11px;
-      letter-spacing: 2px;
+      font-size: 10px;
+      letter-spacing: 1px;
       display: block;
       margin-top: 2px;
     }
@@ -59,12 +59,12 @@
     .status-pill {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 7px;
       background: var(--surface2);
       border: 1px solid var(--border);
-      padding: 6px 14px;
+      padding: 6px 12px;
       border-radius: 20px;
-      font-size: 12px;
+      font-size: 11px;
       letter-spacing: 1px;
     }
 
@@ -74,14 +74,15 @@
       border-radius: 50%;
       background: var(--red);
       transition: background 0.3s;
+      flex-shrink: 0;
     }
 
     .status-dot.connected { background: var(--green); }
 
     main {
-      max-width: 860px;
+      padding: 16px;
+      max-width: 600px;
       margin: 0 auto;
-      padding: 32px 20px;
     }
 
     /* QR Panel */
@@ -89,29 +90,29 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 20px;
-      padding: 48px 32px;
+      gap: 16px;
+      padding: 32px 20px;
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 4px;
-      margin-bottom: 32px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      text-align: center;
     }
 
     #qr-panel.hidden { display: none; }
 
     #qr-panel h2 {
       color: var(--accent);
-      letter-spacing: 4px;
+      letter-spacing: 3px;
       text-transform: uppercase;
-      font-size: 14px;
+      font-size: 13px;
     }
 
     #qr-panel p {
       color: var(--text-dim);
-      font-size: 13px;
-      text-align: center;
-      max-width: 340px;
+      font-size: 12px;
       line-height: 1.7;
+      max-width: 280px;
     }
 
     #qr-image {
@@ -119,95 +120,101 @@
       border-radius: 4px;
       background: #fff;
       padding: 8px;
+      width: min(220px, 70vw);
+      height: auto;
     }
 
     /* Empty state */
     #empty-state {
       text-align: center;
-      padding: 64px 32px;
+      padding: 48px 16px;
       color: var(--text-dim);
     }
 
     #empty-state .tagline {
-      font-size: 13px;
+      font-size: 11px;
       letter-spacing: 2px;
-      margin-bottom: 12px;
+      margin-bottom: 14px;
       color: var(--accent-dim);
       text-transform: uppercase;
     }
 
     #empty-state .quote {
       font-style: italic;
-      font-size: 15px;
+      font-size: 13px;
       color: var(--text-dim);
-      max-width: 500px;
-      margin: 0 auto;
-      line-height: 1.8;
+      line-height: 1.9;
     }
 
     /* Message cards */
     .message-card {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 4px;
-      margin-bottom: 20px;
+      border-radius: 6px;
+      margin-bottom: 16px;
       overflow: hidden;
-      animation: slideIn 0.3s ease;
+      animation: slideIn 0.25s ease;
     }
 
     @keyframes slideIn {
-      from { opacity: 0; transform: translateY(10px); }
+      from { opacity: 0; transform: translateY(8px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
     .message-card.replied {
       border-color: var(--accent-dim);
-      opacity: 0.7;
+      opacity: 0.65;
     }
 
     .card-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 12px 16px;
+      padding: 10px 14px;
       background: var(--surface2);
       border-bottom: 1px solid var(--border);
+      gap: 8px;
     }
 
     .card-from {
-      font-size: 12px;
+      font-size: 11px;
       color: var(--accent);
       letter-spacing: 1px;
       text-transform: uppercase;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .card-time {
       font-size: 11px;
       color: var(--text-dim);
+      flex-shrink: 0;
     }
 
     .card-body {
-      padding: 16px;
+      padding: 14px;
     }
 
     .card-message {
       font-size: 15px;
       color: var(--text);
       line-height: 1.6;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
       border-left: 3px solid var(--border);
       padding-left: 12px;
+      word-break: break-word;
     }
 
-    .card-actions {
-      display: flex;
-      gap: 10px;
-    }
-
+    /* Buttons */
     .btn {
-      padding: 8px 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      padding: 0 18px;
       border: 1px solid var(--border);
-      border-radius: 3px;
+      border-radius: 4px;
       background: transparent;
       color: var(--text);
       font-family: inherit;
@@ -216,19 +223,25 @@
       text-transform: uppercase;
       cursor: pointer;
       transition: all 0.15s;
+      touch-action: manipulation;
     }
 
-    .btn:hover { border-color: var(--accent); color: var(--accent); }
+    .btn:active { opacity: 0.7; transform: scale(0.97); }
     .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
     .btn-generate {
       border-color: var(--accent-dim);
       color: var(--accent);
+      width: 100%;
     }
 
-    .btn-generate:hover {
-      background: var(--accent);
-      color: var(--bg);
+    .btn-generate:active { background: var(--accent-dim); }
+
+    .btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 14px;
     }
 
     .btn-send {
@@ -236,19 +249,21 @@
       color: var(--green);
     }
 
-    .btn-send:hover {
-      background: var(--green);
-      color: var(--bg);
+    .btn-send:active { background: rgba(39,174,96,0.15); }
+
+    .btn-again {
+      border-color: var(--accent-dim);
+      color: var(--accent-dim);
     }
 
     /* Quote block */
     .quote-block {
-      margin-top: 16px;
-      padding: 16px;
+      margin-top: 14px;
+      padding: 14px;
       background: var(--bg);
       border: 1px solid var(--accent-dim);
-      border-radius: 3px;
-      animation: fadeIn 0.4s ease;
+      border-radius: 4px;
+      animation: fadeIn 0.3s ease;
     }
 
     @keyframes fadeIn {
@@ -257,11 +272,11 @@
     }
 
     .quote-text {
-      font-size: 15px;
+      font-size: 14px;
       font-style: italic;
       color: var(--accent);
       line-height: 1.8;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
 
     .quote-meta {
@@ -278,33 +293,32 @@
       font-style: normal;
       border-top: 1px solid var(--border);
       padding-top: 10px;
+      line-height: 1.6;
     }
 
     .spinner {
       display: inline-block;
-      width: 14px;
-      height: 14px;
+      width: 13px;
+      height: 13px;
       border: 2px solid var(--accent-dim);
       border-top-color: var(--accent);
       border-radius: 50%;
       animation: spin 0.7s linear infinite;
-      vertical-align: middle;
-      margin-right: 6px;
+      margin-right: 7px;
+      flex-shrink: 0;
     }
 
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
     .replied-badge {
-      display: inline-block;
       font-size: 11px;
       color: var(--green);
       letter-spacing: 1px;
       text-transform: uppercase;
       border: 1px solid var(--green);
-      padding: 3px 10px;
+      padding: 6px 14px;
       border-radius: 20px;
+      display: inline-block;
     }
   </style>
 </head>
@@ -317,23 +331,22 @@
   </div>
   <div class="status-pill">
     <div class="status-dot" id="status-dot"></div>
-    <span id="status-text">Connecting...</span>
+    <span id="status-text">Connecting</span>
   </div>
 </header>
 
 <main>
   <div id="qr-panel">
     <h2>Scan to Connect</h2>
-    <p>Open WhatsApp on your phone → Menu → Linked Devices → Link a Device</p>
-    <img id="qr-image" width="220" height="220" alt="QR Code loading..." />
-    <p style="font-size:11px">Waiting for QR code from server...</p>
+    <img id="qr-image" width="220" height="220" alt="Loading QR..." />
+    <p>Open WhatsApp → tap Menu → Linked Devices → Link a Device, then scan</p>
   </div>
 
   <div id="messages-container">
     <div id="empty-state">
       <div class="tagline">Waiting for messages</div>
       <div class="quote">
-        "Don't let yourself get attached to anything you are not willing to<br>
+        "Don't let yourself get attached to anything you are not willing to
         walk out on in 30 seconds flat if you feel the heat around the corner."
       </div>
     </div>
@@ -366,67 +379,58 @@
   });
 
   socket.on('replied', ({ messageId }) => {
-    const card = document.getElementById(`card-${messageId}`);
-    if (card) card.classList.add('replied');
+    document.getElementById(`card-${messageId}`)?.classList.add('replied');
   });
 
   function renderMessage(meta) {
     const card = document.createElement('div');
     card.className = 'message-card';
     card.id = `card-${meta.id}`;
-
     const time = new Date(meta.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
     card.innerHTML = `
       <div class="card-header">
-        <span class="card-from">${escHtml(meta.from)}</span>
+        <span class="card-from">${esc(meta.from)}</span>
         <span class="card-time">${time}</span>
       </div>
       <div class="card-body">
-        <div class="card-message">${escHtml(meta.body)}</div>
-        <div class="card-actions">
-          <button class="btn btn-generate" onclick="generateQuote('${meta.id}', this)">
-            Get Heat Quote
-          </button>
-        </div>
+        <div class="card-message">${esc(meta.body)}</div>
+        <button class="btn btn-generate" id="gen-btn-${meta.id}" onclick="generateQuote('${meta.id}')">
+          Get Heat Quote
+        </button>
         <div class="quote-block" id="quote-${meta.id}" style="display:none"></div>
       </div>
     `;
-
     messagesContainer.insertBefore(card, messagesContainer.firstChild);
   }
 
-  async function generateQuote(messageId, btn) {
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span>Thinking...';
+  async function generateQuote(messageId) {
+    const btn = document.getElementById(`gen-btn-${messageId}`);
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Thinking...'; }
 
     try {
       const res = await fetch(`/api/generate-quote?messageId=${encodeURIComponent(messageId)}`);
       const data = await res.json();
-
       if (data.error) throw new Error(data.error);
 
-      const quoteBlock = document.getElementById(`quote-${messageId}`);
-      quoteBlock.style.display = 'block';
-      quoteBlock.innerHTML = `
-        <div class="quote-text">"${escHtml(data.quote)}"</div>
-        <div class="quote-meta">— ${escHtml(data.character)}, Heat (1995)</div>
-        ${data.why ? `<div class="quote-why">🎬 ${escHtml(data.why)}</div>` : ''}
-        <div style="margin-top:14px; display:flex; gap:10px; align-items:center">
-          <button class="btn btn-send" onclick="sendReply('${messageId}', this, ${JSON.stringify(data.quote).replace(/'/g,"&#39;")}, ${JSON.stringify(data.character).replace(/'/g,"&#39;")})">
-            Send This Reply
+      const block = document.getElementById(`quote-${messageId}`);
+      block.style.display = 'block';
+      block.innerHTML = `
+        <div class="quote-text">"${esc(data.quote)}"</div>
+        <div class="quote-meta">— ${esc(data.character)}, Heat (1995)</div>
+        ${data.why ? `<div class="quote-why">${esc(data.why)}</div>` : ''}
+        <div class="btn-row">
+          <button class="btn btn-send" onclick="sendReply('${messageId}', this, ${safeJson(data.quote)}, ${safeJson(data.character)})">
+            Send Reply
           </button>
-          <button class="btn btn-generate" onclick="generateQuote('${messageId}', this)">
-            Try Another
+          <button class="btn btn-again" onclick="generateQuote('${messageId}')">
+            Try Again
           </button>
         </div>
       `;
-
-      btn.remove();
+      if (btn) btn.remove();
     } catch (err) {
-      btn.disabled = false;
-      btn.textContent = 'Get Heat Quote';
-      alert('Failed to generate quote: ' + err.message);
+      if (btn) { btn.disabled = false; btn.textContent = 'Get Heat Quote'; }
+      alert('Error: ' + err.message);
     }
   }
 
@@ -443,24 +447,23 @@
       const data = await res.json();
       if (data.error) throw new Error(data.error);
 
-      const quoteBlock = document.getElementById(`quote-${messageId}`);
-      const actionsDiv = quoteBlock.querySelector('div[style]');
-      if (actionsDiv) actionsDiv.innerHTML = '<span class="replied-badge">✓ Sent</span>';
-
+      const block = document.getElementById(`quote-${messageId}`);
+      const row = block.querySelector('.btn-row');
+      if (row) row.innerHTML = '<span class="replied-badge">Sent</span>';
       document.getElementById(`card-${messageId}`)?.classList.add('replied');
     } catch (err) {
       btn.disabled = false;
-      btn.textContent = 'Send This Reply';
-      alert('Failed to send: ' + err.message);
+      btn.textContent = 'Send Reply';
+      alert('Error: ' + err.message);
     }
   }
 
-  function escHtml(str) {
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function safeJson(s) {
+    return JSON.stringify(s).replace(/</g,'\\u003c').replace(/>/g,'\\u003e');
   }
 </script>
 </body>
