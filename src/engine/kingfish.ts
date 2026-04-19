@@ -26,11 +26,11 @@ const MONTHLY_SST_BASELINE: Record<number, number> = {
 const OFFSHORE_DIRECTIONS = new Set(["W", "WNW", "WSW", "NW", "NNW", "SW", "SSW"]);
 const ONSHORE_DIRECTIONS = new Set(["E", "ENE", "ESE", "NE", "NNE", "SE", "SSE"]);
 
-const KINGFISH_STRUCTURE = new Set([
+const KINGFISH_STRUCTURE = [
   "headlands", "drop-offs", "bommies", "reef edges", "gutters",
   "rocky reef", "reef drop-offs", "boulder reef", "dramatic walls",
   "reef ledges", "walls", "deep drop-offs", "boulder fields",
-]);
+];
 
 // --- Types ---
 
@@ -350,7 +350,7 @@ export function calculateSiteKingfishScore(
   const result = calculateKingfishScore(siteInput);
 
   const hasStructure = site.structure.some((s) =>
-    [...KINGFISH_STRUCTURE].some((ks) => s.toLowerCase().includes(ks))
+    KINGFISH_STRUCTURE.some((ks) => s.toLowerCase().includes(ks))
   );
   const isKingfishSite = site.targetSpecies.some((s) =>
     s.toLowerCase().includes("kingfish")
@@ -362,7 +362,7 @@ export function calculateSiteKingfishScore(
   if (isKingfishSite && hasStructure) {
     siteBonus += 10;
     const matchedStructure = site.structure
-      .filter((s) => [...KINGFISH_STRUCTURE].some((ks) => s.toLowerCase().includes(ks)))
+      .filter((s) => KINGFISH_STRUCTURE.some((ks) => s.toLowerCase().includes(ks)))
       .slice(0, 2);
     reasons.push(`Known kingfish spot with ${matchedStructure.join(" and ")}`);
   } else if (hasStructure) {
