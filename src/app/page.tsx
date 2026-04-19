@@ -87,6 +87,7 @@ interface DiveBriefing {
     explanation: string;
   } | null;
   siteRankings: SiteRanking[];
+  kingfish: KingfishConditionsData | null;
   recommendation: {
     go: boolean;
     confidence: string;
@@ -96,6 +97,35 @@ interface DiveBriefing {
     keyFactors: string[];
   };
   outlook: FiveDayOutlook | null;
+}
+
+interface KingfishFactorScore {
+  name: string;
+  score: number;
+  detail: string;
+}
+
+interface KingfishResultData {
+  normalizedScore: number;
+  rating: string;
+  factors: KingfishFactorScore[];
+  positiveFactors: string[];
+  negativeFactors: string[];
+  bestTimeWindow: string;
+  safetyOverride: boolean;
+  safetyWarning: string | null;
+}
+
+interface SiteKingfishResultData extends KingfishResultData {
+  siteId: string;
+  siteName: string;
+  siteReason: string;
+}
+
+interface KingfishConditionsData {
+  overall: KingfishResultData;
+  perSite: SiteKingfishResultData[];
+  bestSite: SiteKingfishResultData | null;
 }
 
 interface OutlookDay {
@@ -657,6 +687,173 @@ function ForecastTimeline({
         <span className="text-[9px] text-ocean-500">Wind kt</span>
         <span className="text-[9px] text-ocean-500">Rain %</span>
       </div>
+    </div>
+  );
+}
+
+function kingfishRatingColor(rating: string): string {
+  switch (rating) {
+    case "Excellent": return "text-emerald-400";
+    case "Good": return "text-teal-400";
+    case "Fair": return "text-yellow-400";
+    case "Marginal": return "text-orange-400";
+    default: return "text-red-400";
+  }
+}
+
+function kingfishRatingBg(rating: string): string {
+  switch (rating) {
+    case "Excellent": return "bg-emerald-500/10 border-emerald-500/20";
+    case "Good": return "bg-teal-500/10 border-teal-500/20";
+    case "Fair": return "bg-yellow-500/10 border-yellow-500/20";
+    case "Marginal": return "bg-orange-500/10 border-orange-500/20";
+    default: return "bg-red-500/10 border-red-500/20";
+  }
+}
+
+function KingfishCard({ kingfish }: { kingfish: KingfishConditionsData }) {
+  const { overall, bestSite } = kingfish;
+  const [expanded, setExpanded] = useState(false);
+
+  // Safety override — vis < 3m
+  if (overall.safetyOverride) {
+    return (
+      <div className="glass-card border-red-500/20 p-5">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center flex-shrink-0">
+            <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-red-400 mb-1">Kingfish Conditions — Unsafe</p>
+            <p className="text-[13px] text-red-300/80 leading-relaxed">
+              {overall.safetyWarning}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={`glass-card p-5 cursor-pointer transition-all duration-200 ${kingfishRatingBg(overall.rating)}`}
+      onClick={() => setExpanded(!expanded)}
+    >
+      {/* Header */}
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-1">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-ocean-400">
+              Kingfish Conditions
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className={`text-2xl font-bold ${kingfishRatingColor(overall.rating)}`}>
+              {overall.rating}
+            </span>
+          </div>
+        </div>
+        <div className={`flex flex-col items-center px-3 py-1.5 rounded-xl bg-ocean-950/60 ${
+          overall.normalizedScore >= 55 ? "score-glow-teal" : ""
+        }`}>
+          <span className={`text-2xl font-bold leading-none ${kingfishRatingColor(overall.rating)}`}>
+            {overall.normalizedScore}
+          </span>
+          <span className="text-[9px] text-ocean-500 mt-0.5">/100</span>
+        </div>
+      </div>
+
+      {/* Top positive factors */}
+      {overall.positiveFactors.length > 0 && (
+        <div className="space-y-1 mb-2">
+          {overall.positiveFactors.map((f, i) => (
+            <p key={i} className="text-[11px] text-emerald-400/80">+ {f}</p>
+          ))}
+        </div>
+      )}
+
+      {/* Top negative factors */}
+      {overall.negativeFactors.length > 0 && (
+        <div className="space-y-1 mb-2">
+          {overall.negativeFactors.map((f, i) => (
+            <p key={i} className="text-[11px] text-red-400/70">- {f}</p>
+          ))}
+        </div>
+      )}
+
+      {/* Best site + time */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-3 pt-3 border-t border-white/[0.04]">
+        {bestSite && (
+          <div className="flex-1">
+            <p className="text-[10px] text-ocean-500 mb-0.5">Best site for kings</p>
+            <p className="text-xs text-ocean-200 font-medium">{bestSite.siteName}</p>
+            <p className="text-[10px] text-ocean-400">{bestSite.siteReason}</p>
+          </div>
+        )}
+        <div className="flex-1">
+          <p className="text-[10px] text-ocean-500 mb-0.5">Best window</p>
+          <p className="text-xs text-ocean-200 font-medium">{overall.bestTimeWindow}</p>
+        </div>
+      </div>
+
+      {/* Expand hint */}
+      <div className="flex items-center justify-center mt-3 pt-2 border-t border-white/[0.04]">
+        <span className="text-[10px] text-ocean-600">
+          {expanded ? "tap to collapse" : "tap for factor breakdown"}
+        </span>
+        <svg
+          className={`w-3 h-3 ml-1 text-ocean-600 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
+          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
+
+      {/* Expanded: factor breakdown */}
+      {expanded && (
+        <div className="mt-3 pt-3 border-t border-white/[0.06] space-y-3 animate-fade-in">
+          <p className="text-[10px] font-semibold text-ocean-400 uppercase tracking-wider">Factor Breakdown</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+            {overall.factors.map((f) => (
+              <div key={f.name} className="flex items-center justify-between rounded-lg bg-ocean-950/40 border border-white/[0.03] px-2.5 py-2">
+                <div className="flex-1 min-w-0">
+                  <span className="text-[10px] text-ocean-400 block">{f.name}</span>
+                  <span className="text-[9px] text-ocean-500 block truncate">{f.detail}</span>
+                </div>
+                <span className={`text-[11px] font-bold ml-2 flex-shrink-0 ${
+                  f.score > 0 ? "text-emerald-400" : f.score < 0 ? "text-red-400" : "text-ocean-500"
+                }`}>
+                  {f.score > 0 ? "+" : ""}{f.score}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Per-site scores */}
+          {kingfish.perSite.length > 1 && (
+            <div>
+              <p className="text-[10px] font-semibold text-ocean-400 uppercase tracking-wider mb-2">Site Scores</p>
+              <div className="space-y-1">
+                {kingfish.perSite.map((s, i) => (
+                  <div key={s.siteId} className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-ocean-950/30">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-ocean-500 bg-ocean-800/60 px-1.5 py-0.5 rounded">
+                        #{i + 1}
+                      </span>
+                      <span className="text-[11px] text-ocean-200">{s.siteName}</span>
+                    </div>
+                    <span className={`text-[11px] font-bold ${kingfishRatingColor(s.rating)}`}>
+                      {s.normalizedScore}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1300,7 +1497,7 @@ export default function Dashboard() {
     );
   }
 
-  const { conditions, visibility, siteRankings, recommendation, dataStatus, outlook } = briefing;
+  const { conditions, visibility, siteRankings, kingfish, recommendation, dataStatus, outlook } = briefing;
   const { weather, swell } = conditions;
   const obs = weather?.observation ?? null;
   const topScore = siteRankings[0]?.diveScore.overall ?? 0;
@@ -1506,6 +1703,14 @@ export default function Dashboard() {
           />
         </div>
       </section>
+
+      {/* Kingfish Conditions */}
+      {kingfish && (
+        <section>
+          <SectionHeader title="Kingfish Conditions" subtitle="Yellowtail likelihood model" />
+          <KingfishCard kingfish={kingfish} />
+        </section>
+      )}
 
       {/* Forecast Timeline */}
       {swell && (
