@@ -10,8 +10,9 @@ import type { SwellConditions } from "../data/swell";
 import type { OpenMeteoDay } from "../data/open-meteo";
 import type { RainfallData } from "../data/bom";
 import { northernBeachesSites, type DiveSite } from "../sites/northern-beaches";
-import { estimateVisibility, type VisibilityEstimate } from "./visibility";
+import { estimateVisibility, estimateCurrentStrength, type VisibilityEstimate } from "./visibility";
 import { calculateDiveScore, type DiveScore } from "./dive-score";
+import { calculateKingfishScore } from "./kingfish";
 import { getSydneyDayName } from "../utils/sydney-time";
 
 // --- Types ---
@@ -35,6 +36,8 @@ export interface OutlookDay {
   precis: string;
   summary: string; // One-line conditions summary
   source: "WW" | "OM" | "WW+OM"; // Data source indicator
+  kingfishScore: number; // 0-100 normalized kingfish likelihood
+  kingfishRating: string; // Poor / Marginal / Fair / Good / Excellent
 }
 
 export interface FiveDayOutlook {
@@ -361,6 +364,21 @@ export function generate5DayOutlook(
       tideState: "mid_rising",
     });
 
+    const currentStrength = estimateCurrentStrength(swell.height, "mid_rising");
+    const kingfishResult = calculateKingfishScore({
+      month,
+      sst: waterTemp,
+      waterTemp: waterTemp ?? 21,
+      estimatedVis: visEstimate.metres,
+      currentStrength,
+      tideState: "mid_rising",
+      windDirection: wind.direction,
+      windSpeed: wind.speed,
+      pressure: 1013,
+      timeOfDay: "dawn",
+      hour: 6,
+    });
+
     const prevRain = idx > 0 ? (omByDate.get(dates[idx - 1])?.rainProbability ?? 0) : undefined;
     const summary = generateSummary(
       swell.height, wind.speed, wind.direction, rainProbability, idx, prevRain
@@ -385,6 +403,8 @@ export function generate5DayOutlook(
       precis,
       summary,
       source,
+      kingfishScore: kingfishResult.normalizedScore,
+      kingfishRating: kingfishResult.rating,
     };
   }).filter((d): d is OutlookDay => d !== null));
 

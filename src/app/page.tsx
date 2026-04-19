@@ -140,6 +140,8 @@ interface OutlookDay {
   precis: string;
   summary: string;
   source: "WW" | "OM" | "WW+OM";
+  kingfishScore: number;
+  kingfishRating: string;
 }
 
 interface FiveDayOutlook {
@@ -541,8 +543,17 @@ function FiveDayOutlookSection({ outlook }: { outlook: FiveDayOutlook }) {
               {outlookRainIcon(day.rainProbability)} {day.rainProbability}%
             </div>
 
+            {/* Kingfish */}
+            <div className="pt-2 border-t border-white/[0.04] mt-1">
+              <div className="text-[9px] text-ocean-500 mb-0.5">Kingfish</div>
+              <div className={`text-[11px] font-semibold ${kingfishRatingColor(day.kingfishRating)}`}>
+                {day.kingfishRating}
+              </div>
+              <div className="text-[9px] text-ocean-600">{day.kingfishScore}/100</div>
+            </div>
+
             {/* Summary */}
-            <div className="text-[9px] text-ocean-500 leading-snug">
+            <div className="text-[9px] text-ocean-500 leading-snug mt-2">
               {day.summary}
             </div>
           </div>
