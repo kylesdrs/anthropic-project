@@ -45,6 +45,9 @@ env/
 *.swo
 *~
 
+# TypeScript build info
+tsconfig.tsbuildinfo
+
 # OS
 .DS_Store
 Thumbs.db
@@ -52,6 +55,12 @@ Thumbs.db
 # Logs
 logs/
 *.log
+
+# Node.js / Next.js
+node_modules/
+.next/
+out/
+npm-debug.log*
 
 # Processed emails tracking (contains email IDs)
 data/processed_emails.json

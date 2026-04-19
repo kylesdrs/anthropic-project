@@ -1,0 +1,585 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground: #d8e8e4;
+  --background: #041A19;
+}
+
+/* ── Deep viridian base ─────────────────────────────────────── */
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: system-ui, -apple-system, sans-serif;
+  overflow-x: hidden;
+}
+
+/* ── Primary displacement layer: deep oceanic currents ──────── */
+/* Top-left highlight source with gentle shadow falloff to bottom-right */
+body::before {
+  content: "";
+  position: fixed;
+  inset: -200px;
+  z-index: -4;
+  background:
+    /* Top-left highlight: subtle warm viridian light source */
+    radial-gradient(ellipse 85% 65% at 12% 8%, rgba(22, 90, 79, 0.14) 0%, transparent 65%),
+    /* Mid-left flowing current */
+    radial-gradient(ellipse 90% 40% at 25% 45%, rgba(27, 102, 90, 0.07) 0%, transparent 60%),
+    /* Center depth mass */
+    radial-gradient(ellipse 100% 50% at 50% 50%, rgba(11, 59, 54, 0.12) 0%, transparent 55%),
+    /* Bottom-right shadow pool */
+    radial-gradient(ellipse 75% 65% at 82% 88%, rgba(7, 47, 44, 0.14) 0%, transparent 60%),
+    /* Deep base wash */
+    radial-gradient(ellipse 120% 80% at 50% 60%, rgba(6, 38, 36, 0.18) 0%, transparent 70%);
+  filter: blur(140px);
+  animation: viridian-drift 50s cubic-bezier(0.4, 0, 0.6, 1) infinite alternate;
+}
+
+/* ── Secondary displacement layer: slower undertow ──────────── */
+body::after {
+  content: "";
+  position: fixed;
+  inset: -200px;
+  z-index: -3;
+  background:
+    /* Upper-left soft caustic */
+    radial-gradient(ellipse 70% 55% at 18% 22%, rgba(22, 90, 79, 0.08) 0%, transparent 60%),
+    /* Mid-depth horizontal current */
+    radial-gradient(ellipse 100% 35% at 55% 55%, rgba(11, 59, 54, 0.10) 0%, transparent 55%),
+    /* Lower shadow mass */
+    radial-gradient(ellipse 70% 55% at 72% 78%, rgba(14, 77, 69, 0.07) 0%, transparent 60%),
+    /* Deep bottom-right shadow */
+    radial-gradient(ellipse 60% 70% at 88% 92%, rgba(4, 26, 25, 0.16) 0%, transparent 55%);
+  filter: blur(160px);
+  animation: viridian-undertow 60s cubic-bezier(0.4, 0, 0.6, 1) infinite alternate;
+}
+
+/* ── Highlight layer: top-left directional light ────────────── */
+.depth-highlight {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    /* Primary top-left light wash */
+    radial-gradient(ellipse 65% 55% at 8% 3%, rgba(22, 90, 79, 0.08) 0%, transparent 70%),
+    /* Secondary highlight spill across upper third */
+    radial-gradient(ellipse 50% 35% at 28% 12%, rgba(27, 102, 90, 0.04) 0%, transparent 60%);
+  filter: blur(100px);
+  animation: highlight-breathe 45s cubic-bezier(0.4, 0, 0.6, 1) infinite alternate;
+}
+
+/* ── Shadow layer: bottom-right depth falloff ───────────────── */
+.depth-shadow {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    /* Bottom-right deep shadow */
+    radial-gradient(ellipse 70% 60% at 88% 92%, rgba(4, 26, 25, 0.18) 0%, transparent 65%),
+    /* Lower-center shadow bed */
+    radial-gradient(ellipse 80% 40% at 60% 95%, rgba(7, 47, 44, 0.10) 0%, transparent 55%);
+  filter: blur(120px);
+  animation: shadow-settle 55s cubic-bezier(0.4, 0, 0.6, 1) infinite alternate;
+}
+
+/* ── Keyframes: organic, continuous, 30-60s loops ────────────── */
+
+@keyframes viridian-drift {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  20% {
+    transform: translate(8px, 5px) scale(1.005);
+    opacity: 0.93;
+  }
+  45% {
+    transform: translate(18px, 12px) scale(1.012);
+    opacity: 0.96;
+  }
+  70% {
+    transform: translate(6px, 20px) scale(1.008);
+    opacity: 0.91;
+  }
+  100% {
+    transform: translate(-12px, 15px) scale(1.018);
+    opacity: 0.97;
+  }
+}
+
+@keyframes viridian-undertow {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.88;
+  }
+  25% {
+    transform: translate(-10px, 6px) scale(1.006);
+    opacity: 0.92;
+  }
+  50% {
+    transform: translate(-5px, 14px) scale(1.01);
+    opacity: 0.86;
+  }
+  75% {
+    transform: translate(10px, 4px) scale(1.004);
+    opacity: 0.90;
+  }
+  100% {
+    transform: translate(6px, -8px) scale(1.014);
+    opacity: 0.87;
+  }
+}
+
+@keyframes highlight-breathe {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+  35% {
+    opacity: 0.88;
+    transform: translate(4px, 3px);
+  }
+  65% {
+    opacity: 0.94;
+    transform: translate(-3px, 5px);
+  }
+  100% {
+    opacity: 0.90;
+    transform: translate(2px, -2px);
+  }
+}
+
+@keyframes shadow-settle {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+  40% {
+    opacity: 0.92;
+    transform: translate(-4px, 3px);
+  }
+  100% {
+    opacity: 0.88;
+    transform: translate(-6px, 6px);
+  }
+}
+
+/* ── Caustic light pattern: underwater light refraction ──────── */
+/* Ultra-low opacity, heavily blurred, slow organic drift */
+.caustic-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.06;
+  filter: blur(40px);
+  background:
+    /* Primary caustic — large soft organic blobs drifting right */
+    radial-gradient(ellipse 30% 25% at 20% 30%, rgba(22, 90, 79, 0.6) 0%, transparent 100%),
+    radial-gradient(ellipse 25% 35% at 45% 15%, rgba(27, 102, 90, 0.5) 0%, transparent 100%),
+    radial-gradient(ellipse 35% 20% at 70% 45%, rgba(14, 77, 69, 0.4) 0%, transparent 100%),
+    radial-gradient(ellipse 20% 30% at 35% 70%, rgba(22, 90, 79, 0.5) 0%, transparent 100%),
+    radial-gradient(ellipse 30% 25% at 80% 75%, rgba(11, 59, 54, 0.4) 0%, transparent 100%);
+  animation: caustic-drift 40s cubic-bezier(0.4, 0, 0.6, 1) infinite alternate;
+  /* Fade out at edges — directional from top-left */
+  mask-image: radial-gradient(ellipse 80% 75% at 35% 40%, black 0%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 75% at 35% 40%, black 0%, transparent 100%);
+}
+
+/* Secondary caustic layer — offset timing for organic feel */
+.caustic-overlay-2 {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.04;
+  filter: blur(55px);
+  background:
+    radial-gradient(ellipse 35% 30% at 55% 25%, rgba(22, 90, 79, 0.5) 0%, transparent 100%),
+    radial-gradient(ellipse 25% 20% at 25% 55%, rgba(14, 77, 69, 0.4) 0%, transparent 100%),
+    radial-gradient(ellipse 30% 35% at 75% 60%, rgba(27, 102, 90, 0.3) 0%, transparent 100%),
+    radial-gradient(ellipse 20% 25% at 50% 80%, rgba(11, 59, 54, 0.4) 0%, transparent 100%);
+  animation: caustic-drift-2 55s cubic-bezier(0.4, 0, 0.6, 1) infinite alternate;
+  mask-image: radial-gradient(ellipse 75% 70% at 40% 45%, black 0%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 75% 70% at 40% 45%, black 0%, transparent 100%);
+}
+
+@keyframes caustic-drift {
+  0% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+  30% {
+    transform: translate(25px, 15px) scale(1.03) rotate(0.5deg);
+  }
+  60% {
+    transform: translate(-10px, 30px) scale(1.01) rotate(-0.3deg);
+  }
+  100% {
+    transform: translate(15px, -10px) scale(1.04) rotate(0.2deg);
+  }
+}
+
+@keyframes caustic-drift-2 {
+  0% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+  35% {
+    transform: translate(-20px, 20px) scale(1.02) rotate(-0.4deg);
+  }
+  70% {
+    transform: translate(18px, 10px) scale(1.05) rotate(0.3deg);
+  }
+  100% {
+    transform: translate(-8px, -15px) scale(1.01) rotate(-0.2deg);
+  }
+}
+
+/* ── Contour overlay: flowing horizontal wave forms ──────────── */
+.contour-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.03;
+  filter: blur(1px);
+  mask-image: radial-gradient(ellipse 80% 75% at 45% 50%, transparent 30%, black 100%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 75% at 45% 50%, transparent 30%, black 100%);
+}
+
+/* ── Mobile vignette: soft edge darkening for focus ──────────── */
+.mobile-vignette {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  display: none;
+}
+
+@media (max-width: 640px) {
+  .mobile-vignette {
+    display: block;
+    background: radial-gradient(
+      ellipse 70% 65% at 50% 50%,
+      transparent 40%,
+      rgba(4, 26, 25, 0.35) 100%
+    );
+  }
+}
+
+/* ── Sonar sweep animation for score badge ─────────────────── */
+.sonar-wrapper {
+  position: relative;
+}
+
+.sonar-wrapper::before,
+.sonar-wrapper::after {
+  content: "";
+  position: absolute;
+  inset: -12px;
+  border-radius: 1.5rem;
+  pointer-events: none;
+}
+
+/* Expanding ring pulse */
+.sonar-wrapper::before {
+  border: 1px solid currentColor;
+  opacity: 0;
+  animation: sonar-ring 8s ease-out infinite;
+}
+
+/* Conic gradient sweep */
+.sonar-wrapper::after {
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    transparent 300deg,
+    currentColor 340deg,
+    transparent 360deg
+  );
+  opacity: 0;
+  mask: radial-gradient(ellipse at center, transparent 55%, black 56%, black 100%);
+  -webkit-mask: radial-gradient(ellipse at center, transparent 55%, black 56%, black 100%);
+  animation: sonar-sweep 8s linear infinite;
+}
+
+@keyframes sonar-ring {
+  0% {
+    inset: -4px;
+    opacity: 0.25;
+  }
+  50% {
+    inset: -24px;
+    opacity: 0;
+  }
+  100% {
+    inset: -24px;
+    opacity: 0;
+  }
+}
+
+@keyframes sonar-sweep {
+  0% {
+    transform: rotate(0deg);
+    opacity: 0.07;
+  }
+  100% {
+    transform: rotate(360deg);
+    opacity: 0.07;
+  }
+}
+
+/* Color variants for the sonar */
+.sonar-green { color: rgba(16, 140, 110, 0.35); }
+.sonar-teal { color: rgba(22, 90, 79, 0.35); }
+.sonar-yellow { color: rgba(180, 155, 35, 0.28); }
+.sonar-orange { color: rgba(180, 110, 50, 0.28); }
+.sonar-red { color: rgba(180, 80, 80, 0.28); }
+
+/* ── Hero card (elevated from normal glass card) ───────────── */
+.hero-card {
+  background: rgba(4, 26, 25, 0.78);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 1.25rem;
+  position: relative;
+  z-index: 1;
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.025),
+    0 4px 40px rgba(0, 0, 0, 0.40),
+    0 0 0 1px rgba(0, 0, 0, 0.15);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* Inner glow effect — top-left directional */
+.hero-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(ellipse 70% 45% at 25% 0%, rgba(22, 90, 79, 0.05) 0%, transparent 70%);
+}
+
+/* Hero glow variants (score-tier colored outer + inner glow) */
+.hero-glow-green {
+  box-shadow:
+    inset 0 1px 0 0 rgba(16, 120, 96, 0.08),
+    0 4px 40px rgba(16, 120, 96, 0.06);
+}
+.hero-glow-teal {
+  box-shadow:
+    inset 0 1px 0 0 rgba(22, 90, 79, 0.08),
+    0 4px 40px rgba(22, 90, 79, 0.06);
+}
+.hero-glow-yellow {
+  box-shadow:
+    inset 0 1px 0 0 rgba(202, 168, 28, 0.05),
+    0 4px 40px rgba(202, 168, 28, 0.04);
+}
+.hero-glow-orange {
+  box-shadow:
+    inset 0 1px 0 0 rgba(200, 120, 50, 0.05),
+    0 4px 40px rgba(200, 120, 50, 0.04);
+}
+.hero-glow-red {
+  box-shadow:
+    inset 0 1px 0 0 rgba(200, 90, 90, 0.05),
+    0 4px 40px rgba(200, 90, 90, 0.04);
+}
+
+/* ── Staggered fade-in animation ────────────────────────────── */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.5s ease-out both;
+}
+
+/* Stagger delays for child cards */
+.stagger-children > * {
+  animation: fadeInUp 0.4s ease-out both;
+}
+.stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-children > *:nth-child(2) { animation-delay: 60ms; }
+.stagger-children > *:nth-child(3) { animation-delay: 120ms; }
+.stagger-children > *:nth-child(4) { animation-delay: 180ms; }
+.stagger-children > *:nth-child(5) { animation-delay: 240ms; }
+.stagger-children > *:nth-child(6) { animation-delay: 300ms; }
+.stagger-children > *:nth-child(7) { animation-delay: 360ms; }
+.stagger-children > *:nth-child(8) { animation-delay: 420ms; }
+
+/* ── Skeleton loading pulse ─────────────────────────────────── */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.04) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+  border-radius: 0.75rem;
+}
+
+/* ── Glass card base ────────────────────────────────────────── */
+.glass-card {
+  background: rgba(4, 26, 25, 0.60);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 1rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  position: relative;
+  z-index: 1;
+}
+
+.glass-card:hover {
+  border-color: rgba(255, 255, 255, 0.07);
+  box-shadow: 0 0 24px rgba(22, 90, 79, 0.06);
+}
+
+/* ── Subtle glow for score badges ───────────────────────────── */
+.score-glow-green {
+  box-shadow: 0 0 20px rgba(16, 140, 110, 0.14);
+}
+.score-glow-teal {
+  box-shadow: 0 0 20px rgba(22, 90, 79, 0.14);
+}
+.score-glow-yellow {
+  box-shadow: 0 0 20px rgba(180, 155, 35, 0.10);
+}
+.score-glow-orange {
+  box-shadow: 0 0 20px rgba(180, 110, 50, 0.10);
+}
+.score-glow-red {
+  box-shadow: 0 0 20px rgba(180, 80, 80, 0.10);
+}
+
+/* ── Section divider ────────────────────────────────────────── */
+.section-divider {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.05) 50%,
+    transparent 100%
+  );
+}
+
+/* ── Map styling ──────────────────────────────────────────── */
+.map-dot {
+  animation: map-pulse 3s ease-in-out infinite;
+}
+
+.map-dot:nth-child(2) { animation-delay: 0.4s; }
+.map-dot:nth-child(3) { animation-delay: 0.8s; }
+.map-dot:nth-child(4) { animation-delay: 1.2s; }
+.map-dot:nth-child(5) { animation-delay: 1.6s; }
+.map-dot:nth-child(6) { animation-delay: 2.0s; }
+.map-dot:nth-child(7) { animation-delay: 2.4s; }
+
+@keyframes map-pulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+/* ── Smooth scroll ──────────────────────────────────────────── */
+html {
+  scroll-behavior: smooth;
+}
+
+/* ── Mobile: lighter animations, add vignette ────────────────── */
+@media (max-width: 640px) {
+  body::before,
+  body::after {
+    filter: blur(80px);
+    animation-duration: 60s;
+  }
+  .depth-highlight,
+  .depth-shadow {
+    filter: blur(60px);
+    animation-duration: 50s;
+  }
+  .caustic-overlay {
+    opacity: 0.04;
+    filter: blur(50px);
+    animation-duration: 50s;
+  }
+  .caustic-overlay-2 {
+    display: none;
+  }
+  .contour-overlay {
+    display: none;
+  }
+}
+
+/* ── Reduce motion for users who prefer it ─────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  body::before,
+  body::after,
+  .depth-highlight,
+  .depth-shadow,
+  .caustic-overlay,
+  .caustic-overlay-2,
+  .sonar-wrapper::before,
+  .sonar-wrapper::after,
+  .map-dot {
+    animation: none !important;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  /* Hide scrollbar but keep scrolling (mobile timeline) */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  /* Minimal scrollbar — chat starter pills */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ── Chat pulsing dots animation ──────────────────────────────── */
+@keyframes pulse-dot {
+  0%, 80%, 100% {
+    opacity: 0.25;
+    transform: scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
