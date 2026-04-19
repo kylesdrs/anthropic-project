@@ -307,7 +307,7 @@ export function generate5DayOutlook(
   }
 
   // --- Second pass: score each day ---
-  const days: OutlookDay[] = (dayConditions.map((dc, idx) => {
+  const days = (dayConditions.map((dc, idx) => {
     if (!dc) return null;
 
     const { date, dayName, swell, wind, rainProbability, precis, cloudCover, source, waterTemp } = dc;
