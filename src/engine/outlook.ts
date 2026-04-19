@@ -404,7 +404,7 @@ export function generate5DayOutlook(
       summary,
       source,
       kingfishScore: kingfishResult.normalizedScore,
-      kingfishRating: kingfishResult.rating,
+      kingfishRating: kingfishResult.rating as string,
     };
   }).filter((d): d is OutlookDay => d !== null));
 
