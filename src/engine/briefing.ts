@@ -28,6 +28,7 @@ import {
   type KingfishConditions,
 } from "./kingfish";
 import { fetchOpenMeteo5Day } from "../data/open-meteo";
+import { fetchMarineConditions, type MarineConditions } from "../data/open-meteo-marine";
 import { generate5DayOutlook, type FiveDayOutlook, type OutlookDay } from "./outlook";
 import {
   getSydneyHour,
@@ -36,6 +37,11 @@ import {
   getTimeOfDay,
   sydneyLocalToMs,
 } from "../utils/sydney-time";
+import { getSolunarActivity, type SolunarActivity } from "./moon";
+import { calculateSunTimes, type SunTimes } from "./sun-times";
+import { assessBluebottleRisk, type BluebottleRisk } from "./bluebottle";
+import { calculateTideRange, type TideRangeData } from "./tide-range";
+import { calculatePressureTrend, type PressureTrend } from "./pressure-trend";
 
 // --- Types ---
 
@@ -55,12 +61,18 @@ export interface DiveBriefing {
     weather: WeatherConditions | null;
     swell: SwellConditions | null;
     sharkActivity: SharkActivitySummary;
+    marine: MarineConditions | null;
   };
   visibility: VisibilityEstimate | null;
   siteRankings: SiteRanking[];
   kingfish: KingfishConditions | null;
   recommendation: BriefingRecommendation;
   outlook: FiveDayOutlook | null;
+  solunar: SolunarActivity | null;
+  sunTimes: SunTimes | null;
+  tideRange: TideRangeData | null;
+  pressureTrend: PressureTrend | null;
+  bluebottleRisk: BluebottleRisk | null;
 }
 
 export interface BriefingRecommendation {
@@ -95,11 +107,12 @@ export async function generateBriefing(options?: {
     : undefined;
 
   // Fetch all data in parallel
-  const [weather, swell, sharkActivity, omData] = await Promise.all([
+  const [weather, swell, sharkActivity, omData, marineData] = await Promise.all([
     fetchWeatherData(),
     fetchSwellData(),
     fetchSharkActivity(),
     fetchOpenMeteo5Day(),
+    fetchMarineConditions(),
   ]);
 
   // Track which data sources are available
@@ -149,6 +162,8 @@ export async function generateBriefing(options?: {
   let visibility: VisibilityEstimate | null = null;
   if (weather && swell) {
     const month = new Date().getMonth() + 1;
+    // Prefer real SST from marine data; fall back to BOM
+    const realSST = marineData?.seaSurfaceTemp ?? weather.seaSurfaceTemp;
     visibility = estimateVisibility({
       rainfall: weather.rainfall,
       swell: swell.current,
@@ -158,7 +173,7 @@ export async function generateBriefing(options?: {
       windGust: weather.observation.windGust,
       tides: weather.tides,
       month,
-      seaSurfaceTemp: weather.seaSurfaceTemp,
+      seaSurfaceTemp: realSST,
       cloud: weather.observation.cloud,
     });
   }
@@ -210,11 +225,13 @@ export async function generateBriefing(options?: {
     for (const r of siteRankings) {
       siteVisMap.set(r.site.id, r.visibility.metres);
     }
+    // Prefer real SST from marine data; fall back to BOM; use seasonal default as last resort
+    const realSST = marineData?.seaSurfaceTemp ?? weather.seaSurfaceTemp;
     kingfish = calculateKingfishConditions(
       {
         month,
-        sst: weather.seaSurfaceTemp,
-        waterTemp: weather.seaSurfaceTemp ?? 21,
+        sst: realSST,
+        waterTemp: realSST ?? 21,
         estimatedVis: visibility?.metres ?? 5,
         currentStrength,
         tideState: weather.tides.currentState,
@@ -231,6 +248,33 @@ export async function generateBriefing(options?: {
 
   // Generate 5-day outlook (needed before recommendation for forward-looking advice)
   const outlook = generate5DayOutlook(swell, omData, selectedSite, weather?.rainfall);
+
+  // Calculate solunar activity (moon phase and bite times)
+  const solunar = getSolunarActivity();
+
+  // Calculate sun times
+  const sunTimes = calculateSunTimes();
+
+  // Calculate tide range and spring/neap classification
+  let tideRange: TideRangeData | null = null;
+  if (weather?.tides.predictions) {
+    tideRange = calculateTideRange(weather.tides.predictions);
+  }
+
+  // Calculate barometric pressure trend
+  let pressureTrend: PressureTrend | null = null;
+  if (weather?.observation.pressure) {
+    pressureTrend = calculatePressureTrend(weather.observation.pressure);
+  }
+
+  // Assess bluebottle risk
+  let bluebottleRisk: BluebottleRisk | null = null;
+  if (weather) {
+    bluebottleRisk = assessBluebottleRisk(
+      weather.observation.windDirection,
+      weather.observation.windSpeed
+    );
+  }
 
   // Generate recommendation
   const recommendation = generateRecommendation(
@@ -252,12 +296,18 @@ export async function generateBriefing(options?: {
       weather,
       swell,
       sharkActivity,
+      marine: marineData,
     },
     visibility: activeVisibility,
     siteRankings,
     kingfish,
     recommendation,
     outlook,
+    solunar,
+    sunTimes,
+    tideRange,
+    pressureTrend,
+    bluebottleRisk,
   };
 }
 
