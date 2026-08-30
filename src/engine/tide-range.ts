@@ -70,8 +70,15 @@ export function calculateTideRange(predictions: TidePoint[]): TideRangeData {
     explanation = `Neap tide today with ${range.toFixed(2)}m range. Weak currents and slack water — lulls in fish activity.`;
   }
 
-  // Get current state from latest prediction
-  const currentState = "tidal-state"; // Placeholder; would be filled from tide state data
+  // Rising or falling, based on the next upcoming tide event.
+  const upcoming = predictions
+    .filter((p) => new Date(p.time) >= now)
+    .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime())[0];
+  const currentState = upcoming
+    ? upcoming.type === "high"
+      ? "rising"
+      : "falling"
+    : "unknown";
 
   return {
     todaysRange: Math.round(range * 100) / 100,
