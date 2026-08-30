@@ -30,9 +30,9 @@ export function rateLimit(key: string, limit: number, windowMs: number): RateLim
 
   // Occasional sweep so the map cannot grow without bound.
   if (buckets.size > 5000) {
-    for (const [k, b] of buckets) {
+    buckets.forEach((b, k) => {
       if (now >= b.resetAt) buckets.delete(k);
-    }
+    });
   }
 
   let bucket = buckets.get(key);
