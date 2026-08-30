@@ -37,6 +37,88 @@ interface WeatherForecastPoint {
   rainProbability?: number;
 }
 
+interface MarineConditions {
+  timestamp: string;
+  seaSurfaceTemp: number;
+  oceanCurrent: {
+    velocity: number;
+    direction: number;
+    directionCompass: string;
+  };
+  primarySwell: {
+    height: number;
+    period: number;
+    direction: number;
+    directionCompass: string;
+  };
+  secondarySwell: {
+    height: number;
+    period: number;
+    direction: number;
+    directionCompass: string;
+  } | null;
+  windWave: {
+    height: number;
+    period: number;
+  };
+}
+
+interface MoonPhase {
+  illumination: number;
+  phaseName: string;
+  daysInCycle: number;
+  nextFullMoon: string;
+  nextNewMoon: string;
+}
+
+interface SolunarWindow {
+  startHour: number;
+  endHour: number;
+  name: string;
+  intensity: string;
+}
+
+interface SolunarActivity {
+  moonPhase: MoonPhase;
+  todayMajorWindows: SolunarWindow[];
+  todayMinorWindows: SolunarWindow[];
+  bestWindow: SolunarWindow | null;
+  fishActivityForecast: string;
+}
+
+interface SunTimes {
+  date: string;
+  sunrise: string;
+  sunset: string;
+  firstLight: string;
+  lastLight: string;
+  daylengthMinutes: number;
+}
+
+interface TideRangeData {
+  todaysRange: number;
+  classification: string;
+  explanation: string;
+  nextHighHeight: number | null;
+  nextLowHeight: number | null;
+  currentState: string;
+}
+
+interface PressureTrend {
+  trend: string;
+  change: number;
+  interpretation: string;
+  fishActivityImplication: string;
+}
+
+interface BluebottleRisk {
+  riskLevel: string;
+  score: number;
+  reason: string;
+  windFactor: string;
+  recommendation: string;
+}
+
 interface DiveBriefing {
   generatedAt: string;
   forecastHour: number | null;
@@ -78,6 +160,7 @@ interface DiveBriefing {
       windForecast?: WindForecastPoint[];
       weatherForecast?: WeatherForecastPoint[];
     } | null;
+    marine: MarineConditions | null;
   };
   visibility: {
     metres: number;
@@ -97,6 +180,11 @@ interface DiveBriefing {
     keyFactors: string[];
   };
   outlook: FiveDayOutlook | null;
+  solunar: SolunarActivity | null;
+  sunTimes: SunTimes | null;
+  tideRange: TideRangeData | null;
+  pressureTrend: PressureTrend | null;
+  bluebottleRisk: BluebottleRisk | null;
 }
 
 interface KingfishFactorScore {
@@ -1508,8 +1596,8 @@ export default function Dashboard() {
     );
   }
 
-  const { conditions, visibility, siteRankings, kingfish, recommendation, dataStatus, outlook } = briefing;
-  const { weather, swell } = conditions;
+  const { conditions, visibility, siteRankings, kingfish, recommendation, dataStatus, outlook, solunar, sunTimes, tideRange, pressureTrend, bluebottleRisk } = briefing;
+  const { weather, swell, marine } = conditions;
   const obs = weather?.observation ?? null;
   const topScore = siteRankings[0]?.diveScore.overall ?? 0;
   const activeSiteName = selectedSite !== "all"
@@ -1684,12 +1772,22 @@ export default function Dashboard() {
             icon="*"
             label="Water Temp"
             value={
-              weather?.seaSurfaceTemp
-                ? `${weather.seaSurfaceTemp}°C`
-                : "—"
+              marine?.seaSurfaceTemp
+                ? `${marine.seaSurfaceTemp}°C`
+                : weather?.seaSurfaceTemp
+                  ? `${weather.seaSurfaceTemp}°C`
+                  : "—"
             }
             sub={obs ? `Air ${obs.airTemp}°C` : "Data unavailable"}
           />
+          {marine && (
+            <ConditionCard
+              icon="→"
+              label="Current"
+              value={`${marine.oceanCurrent.velocity.toFixed(1)} m/s`}
+              sub={marine.oceanCurrent.directionCompass}
+            />
+          )}
           <ConditionCard
             icon="o"
             label="Visibility"
@@ -1738,6 +1836,150 @@ export default function Dashboard() {
       {/* 5-Day Outlook */}
       {outlook && outlook.days.length > 0 && (
         <FiveDayOutlookSection outlook={outlook} />
+      )}
+
+      {/* Moon Phase & Solunar */}
+      {solunar && (
+        <section>
+          <SectionHeader title="Moon Phase & Bite Times" subtitle="Solunar activity" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="glass-card p-5">
+              <div className="mb-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-ocean-400 mb-2">Moon Phase</p>
+                <div className="flex items-center gap-4">
+                  <div className="text-4xl font-bold text-teal-400">{solunar.moonPhase.illumination}%</div>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-white mb-1 capitalize">{solunar.moonPhase.phaseName}</p>
+                    <p className="text-[10px] text-ocean-500">Day {Math.round(solunar.moonPhase.daysInCycle)} of cycle</p>
+                  </div>
+                </div>
+              </div>
+              <p className="text-[11px] text-ocean-400 leading-relaxed">{solunar.fishActivityForecast}</p>
+            </div>
+            <div className="glass-card p-5">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-ocean-400 mb-3">Feeding Windows</p>
+              <div className="space-y-2">
+                {solunar.todayMajorWindows.map((w, i) => (
+                  <div key={`major-${i}`} className="flex justify-between items-center text-[10px]">
+                    <span className="text-ocean-400">Major: {String(w.startHour).padStart(2, "0")}:00–{String(w.endHour).padStart(2, "0")}:00</span>
+                    <span className="text-emerald-400 font-semibold">{w.intensity}</span>
+                  </div>
+                ))}
+                {solunar.todayMinorWindows.map((w, i) => (
+                  <div key={`minor-${i}`} className="flex justify-between items-center text-[10px]">
+                    <span className="text-ocean-400">Minor: {String(w.startHour).padStart(2, "0")}:00–{String(w.endHour).padStart(2, "0")}:00</span>
+                    <span className="text-yellow-400 font-semibold">{w.intensity}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Sun Times */}
+      {sunTimes && (
+        <section>
+          <SectionHeader title="Sun Times" subtitle="Light windows" />
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <ConditionCard
+              icon="🌅"
+              label="First Light"
+              value={sunTimes.firstLight}
+              sub="Civil dawn"
+            />
+            <ConditionCard
+              icon="🌞"
+              label="Sunrise"
+              value={sunTimes.sunrise}
+              sub="Sun above horizon"
+            />
+            <ConditionCard
+              icon="🌇"
+              label="Sunset"
+              value={sunTimes.sunset}
+              sub="Sun below horizon"
+            />
+            <ConditionCard
+              icon="🌙"
+              label="Last Light"
+              value={sunTimes.lastLight}
+              sub="Civil dusk"
+            />
+          </div>
+        </section>
+      )}
+
+      {/* Tide Range & Spring/Neap */}
+      {tideRange && (
+        <section>
+          <SectionHeader title="Tidal Range" subtitle="Spring vs Neap" />
+          <div className="glass-card p-5">
+            <div className="grid grid-cols-3 gap-4 mb-4">
+              <div>
+                <p className="text-[10px] text-ocean-500 font-semibold mb-1">Range Today</p>
+                <p className="text-2xl font-bold text-teal-400">{tideRange.todaysRange}m</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-ocean-500 font-semibold mb-1">Classification</p>
+                <p className={`text-sm font-semibold capitalize ${tideRange.classification === "spring" ? "text-emerald-400" : "text-yellow-400"}`}>
+                  {tideRange.classification} Tide
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] text-ocean-500 font-semibold mb-1">High/Low</p>
+                <p className="text-sm text-ocean-300">{tideRange.nextHighHeight}m / {tideRange.nextLowHeight}m</p>
+              </div>
+            </div>
+            <p className="text-[11px] text-ocean-400 leading-relaxed">{tideRange.explanation}</p>
+          </div>
+        </section>
+      )}
+
+      {/* Pressure Trend */}
+      {pressureTrend && (
+        <section>
+          <SectionHeader title="Barometric Pressure" subtitle="Weather outlook" />
+          <div className="glass-card p-5">
+            <div className="flex items-start gap-4 mb-3">
+              <div>
+                <p className="text-[10px] text-ocean-500 font-semibold mb-1">Trend</p>
+                <p className={`text-lg font-bold capitalize ${pressureTrend.trend === "rising" ? "text-emerald-400" : pressureTrend.trend === "falling" ? "text-red-400" : "text-yellow-400"}`}>
+                  {pressureTrend.trend}
+                </p>
+                <p className="text-[10px] text-ocean-500 mt-1">{pressureTrend.change > 0 ? "+" : ""}{pressureTrend.change.toFixed(1)} hPa</p>
+              </div>
+              <div className="flex-1">
+                <p className="text-[11px] text-ocean-400 leading-relaxed mb-2">{pressureTrend.interpretation}</p>
+                <p className="text-[10px] text-ocean-500 italic">{pressureTrend.fishActivityImplication}</p>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Bluebottle Risk */}
+      {bluebottleRisk && (
+        <section>
+          <SectionHeader title="Stinger Alert" subtitle="Bluebottle risk" />
+          <div className={`glass-card p-5 ${bluebottleRisk.riskLevel === "high" ? "border-orange-500/20" : bluebottleRisk.riskLevel === "moderate" ? "border-yellow-500/20" : "border-emerald-500/20"}`}>
+            <div className="flex items-start gap-4">
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${bluebottleRisk.riskLevel === "high" ? "bg-red-500/10" : bluebottleRisk.riskLevel === "moderate" ? "bg-yellow-500/10" : "bg-emerald-500/10"}`}>
+                <span className="text-xl">🫧</span>
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  <p className={`text-sm font-semibold capitalize ${bluebottleRisk.riskLevel === "high" ? "text-red-400" : bluebottleRisk.riskLevel === "moderate" ? "text-yellow-400" : "text-emerald-400"}`}>
+                    {bluebottleRisk.riskLevel} Risk
+                  </p>
+                  <p className="text-[10px] text-ocean-500">({bluebottleRisk.score}/100)</p>
+                </div>
+                <p className="text-[11px] text-ocean-400 mb-2">{bluebottleRisk.windFactor}</p>
+                <p className="text-[10px] text-ocean-500">{bluebottleRisk.recommendation}</p>
+              </div>
+            </div>
+          </div>
+        </section>
       )}
 
       {/* Visibility factors */}
