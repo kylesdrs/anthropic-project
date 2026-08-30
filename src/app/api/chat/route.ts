@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { generateBriefing } from "../../../engine/briefing";
+import { rateLimit, clientIp } from "../../../utils/rate-limit";
 
 export async function POST(request: NextRequest) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -11,11 +12,39 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Per-IP rate limit to protect API spend: 8 per minute and 60 per day.
+  const ip = clientIp(request);
+  const perMin = rateLimit(`chat:min:${ip}`, 8, 60_000);
+  const perDay = rateLimit(`chat:day:${ip}`, 60, 24 * 60 * 60_000);
+  if (!perMin.allowed || !perDay.allowed) {
+    const retry = !perMin.allowed ? perMin.resetInSeconds : perDay.resetInSeconds;
+    return new Response(
+      JSON.stringify({ error: "Too many messages — give it a minute and try again." }),
+      { status: 429, headers: { "Content-Type": "application/json", "Retry-After": String(retry) } }
+    );
+  }
+
   try {
     const { message, history } = (await request.json()) as {
       message: string;
       history: { role: "user" | "assistant"; content: string }[];
     };
+
+    // Cap input size so a single request cannot inflate token cost.
+    if (typeof message !== "string" || message.trim().length === 0 || message.length > 2000) {
+      return new Response(
+        JSON.stringify({ error: "Message must be between 1 and 2000 characters." }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    const safeHistory = Array.isArray(history)
+      ? history
+          .filter(
+            (m) =>
+              m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string"
+          )
+          .map((m) => ({ role: m.role, content: m.content.slice(0, 4000) }))
+      : [];
 
     // Fetch current briefing data
     const briefing = await generateBriefing();
@@ -36,7 +65,7 @@ Good sources when you do search: abyss.com.au/dive-conditions, bom.gov.au Sydney
     const briefingContext = `Current Spearo Intel data:\n${JSON.stringify(briefing, null, 2)}`;
 
     // Truncate history to last 10 messages
-    const truncatedHistory = history.slice(-10);
+    const truncatedHistory = safeHistory.slice(-10);
 
     const messages: Anthropic.MessageParam[] = [
       ...truncatedHistory.map((msg) => ({

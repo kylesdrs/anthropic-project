@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { addVisReport, getCalibrationSummary } from "../../../data/calibration";
 import { generateBriefing } from "../../../engine/briefing";
 import { northernBeachesSites } from "../../../sites/northern-beaches";
+import { rateLimit, clientIp } from "../../../utils/rate-limit";
 
 /**
  * GET /api/calibration
@@ -37,6 +38,16 @@ export async function GET() {
  * }
  */
 export async function POST(request: NextRequest) {
+  // Per-IP rate limit to prevent report spam.
+  const ip = clientIp(request);
+  const rl = rateLimit(`cal:${ip}`, 15, 60_000);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Too many reports — slow down a moment." },
+      { status: 429, headers: { "Retry-After": String(rl.resetInSeconds) } }
+    );
+  }
+
   try {
     const body = await request.json();
 
