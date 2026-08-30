@@ -1,33 +1,41 @@
 /**
  * Moon phase and solunar activity calculator.
  *
- * Computes moon phase (illumination %, phase name) from date.
- * Generates approximate solunar major/minor feeding windows based on
- * moon transit and rise/set times (simple heuristic).
+ * Moon phase uses the synodic month (~29.53 days) from a known new-moon epoch.
  *
- * Uses synodic month (~29.53 days) from a known new moon epoch.
+ * Solunar feeding windows are computed from the moon's ACTUAL position for the
+ * Sydney Northern Beaches: the major windows are the ~2 hours around the moon's
+ * transit (directly overhead) and its opposite passage (underfoot); the minor
+ * windows are the ~1 hour around moonrise and moonset. The moon's right
+ * ascension and declination come from a low-precision lunar ephemeris
+ * (Schlyter's method with the main perturbation terms), which is accurate to a
+ * few minutes for this purpose.
  */
 
 // --- Constants ---
 
-/** New moon reference: 2000-01-06 (JD 2451550.5) */
-const NEW_MOON_EPOCH_JD = 2451550.5;
+const NEW_MOON_EPOCH_JD = 2451550.5; // 2000-01-06
 const SYNODIC_MONTH = 29.530588; // days
+
+const LAT_OBS = -33.87; // Sydney Northern Beaches
+const LON_OBS = 151.28; // east positive
+const MOON_H0 = 0.125; // apparent altitude of moon centre at rise/set (deg)
 
 // --- Types ---
 
 export interface MoonPhase {
   illumination: number; // 0-100 (%)
-  phaseName: string; // "new", "waxing", "first-quarter", "waxing-gibbous", "full", "waning-gibbous", "last-quarter", "waning-crescent"
+  phaseName: string;
   daysInCycle: number; // 0-29.53
   nextFullMoon: string; // ISO date
   nextNewMoon: string; // ISO date
 }
 
 export interface SolunarWindow {
-  startHour: number; // 0-23 (Sydney time)
-  endHour: number; // 0-23
-  name: string; // "major", "minor"
+  start: string; // HH:MM Sydney
+  end: string; // HH:MM Sydney
+  centerHour: number; // 0-23 Sydney (for ordering)
+  name: "major" | "minor";
   intensity: "high" | "medium" | "low";
 }
 
@@ -36,64 +44,44 @@ export interface SolunarActivity {
   todayMajorWindows: SolunarWindow[];
   todayMinorWindows: SolunarWindow[];
   bestWindow: SolunarWindow | null;
+  moonrise: string | null;
+  moonset: string | null;
+  transit: string | null;
   fishActivityForecast: string;
+  explanation: string;
 }
 
-// --- Helpers ---
+// --- Trig helpers (degrees) ---
 
-/** Julian Day Number from a Date */
+const D2R = Math.PI / 180;
+const sind = (x: number) => Math.sin(x * D2R);
+const cosd = (x: number) => Math.cos(x * D2R);
+const asind = (x: number) => Math.asin(x) / D2R;
+const atan2d = (y: number, x: number) => Math.atan2(y, x) / D2R;
+const rev = (x: number) => ((x % 360) + 360) % 360;
+
+// --- Julian day ---
+
 function dateToJD(d: Date): number {
-  const year = d.getUTCFullYear();
-  const month = d.getUTCMonth() + 1;
-  const day = d.getUTCDate();
-  const hours = d.getUTCHours() / 24;
-
-  const a = Math.floor((14 - month) / 12);
-  const y = year + 4800 - a;
-  const m = month + 12 * a - 3;
-
-  const jdn = day + Math.floor((153 * m + 2) / 5) + 365 * y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) - 32045;
-  return jdn - 0.5 + hours;
+  return d.getTime() / 86400000 + 2440587.5;
 }
 
-/** Date from Julian Day Number */
 function jdToDate(jd: number): Date {
-  const a = Math.floor(jd + 0.5) + 32044;
-  const b = Math.floor((4 * a + 3) / 146097);
-  const c = a - Math.floor((146097 * b) / 4);
-  const d = Math.floor((4 * c + 3) / 1461);
-  const e = c - Math.floor((1461 * d) / 4);
-  const m = Math.floor((5 * e + 2) / 153);
-
-  const day = e - Math.floor((153 * m + 2) / 5) + 1;
-  const month = m + 3 - 12 * Math.floor((m + 10) / 12);
-  const year = 100 * b + d - 4800 + Math.floor((m + 10) / 12);
-
-  const frac = jd + 0.5 - Math.floor(jd + 0.5);
-  const hours = frac * 24;
-  const mins = (hours % 1) * 60;
-  const secs = (mins % 1) * 60;
-
-  return new Date(Date.UTC(year, month - 1, day, Math.floor(hours), Math.floor(mins), Math.floor(secs)));
+  return new Date((jd - 2440587.5) * 86400000);
 }
 
-// --- Moon Phase Calculation ---
+// --- Moon phase (unchanged, this part is astronomically sound) ---
 
-/**
- * Calculate moon phase from a given date.
- */
 export function calculateMoonPhase(date: Date = new Date()): MoonPhase {
   const jd = dateToJD(date);
   const daysSinceNewMoon = (jd - NEW_MOON_EPOCH_JD) % SYNODIC_MONTH;
   const daysInCycle = daysSinceNewMoon < 0 ? daysSinceNewMoon + SYNODIC_MONTH : daysSinceNewMoon;
 
-  // Illumination as percentage
-  const illumination = Math.round((1 - Math.cos((2 * Math.PI * daysInCycle) / SYNODIC_MONTH)) / 2 * 100);
+  const illumination = Math.round(((1 - Math.cos((2 * Math.PI * daysInCycle) / SYNODIC_MONTH)) / 2) * 100);
 
-  // Phase name
-  let phaseName: MoonPhase["phaseName"];
+  let phaseName: string;
   if (daysInCycle < 1.84) phaseName = "new";
-  else if (daysInCycle < 7.38) phaseName = "waxing";
+  else if (daysInCycle < 7.38) phaseName = "waxing-crescent";
   else if (daysInCycle < 9.23) phaseName = "first-quarter";
   else if (daysInCycle < 14.77) phaseName = "waxing-gibbous";
   else if (daysInCycle < 16.61) phaseName = "full";
@@ -101,129 +89,239 @@ export function calculateMoonPhase(date: Date = new Date()): MoonPhase {
   else if (daysInCycle < 23.99) phaseName = "last-quarter";
   else phaseName = "waning-crescent";
 
-  // Next full moon (roughly half cycle away)
-  const fullMoonJD = NEW_MOON_EPOCH_JD + Math.ceil((jd - NEW_MOON_EPOCH_JD) / SYNODIC_MONTH) * SYNODIC_MONTH + (SYNODIC_MONTH / 2);
-  const nextFullDate = jdToDate(fullMoonJD);
-
-  // Next new moon
-  const nextNewJD = NEW_MOON_EPOCH_JD + (Math.ceil((jd - NEW_MOON_EPOCH_JD) / SYNODIC_MONTH) + 1) * SYNODIC_MONTH;
-  const nextNewDate = jdToDate(nextNewJD);
+  const cyclesSinceEpoch = (jd - NEW_MOON_EPOCH_JD) / SYNODIC_MONTH;
+  const fullMoonJD = NEW_MOON_EPOCH_JD + (Math.floor(cyclesSinceEpoch) + 0.5) * SYNODIC_MONTH;
+  const nextFullJD = fullMoonJD >= jd ? fullMoonJD : fullMoonJD + SYNODIC_MONTH;
+  const nextNewJD = NEW_MOON_EPOCH_JD + (Math.floor(cyclesSinceEpoch) + 1) * SYNODIC_MONTH;
 
   return {
     illumination: Math.max(0, Math.min(100, illumination)),
     phaseName,
     daysInCycle,
-    nextFullMoon: nextFullDate.toLocaleDateString("en-CA"),
-    nextNewMoon: nextNewDate.toLocaleDateString("en-CA"),
+    nextFullMoon: jdToDate(nextFullJD).toLocaleDateString("en-CA"),
+    nextNewMoon: jdToDate(nextNewJD).toLocaleDateString("en-CA"),
   };
 }
 
-// --- Solunar Windows ---
+// --- Lunar position (Schlyter, main perturbations) ---
 
-/**
- * Generate approximate solunar major and minor feeding windows for a day.
- * Major windows occur near moon transit and opposite (higher activity).
- * Minor windows occur near moon rise/set (moderate activity).
- *
- * Simplified heuristic: roughly 24h / 24.84h (lunar day) cycle.
- * This gives 2 major windows and 2 minor windows per day, offset by phase.
- */
-export function calculateSolunarWindows(date: Date = new Date()): SolunarWindow[] {
-  const phase = calculateMoonPhase(date);
-  const { daysInCycle } = phase;
+function moonRaDec(jd: number): { raDeg: number; decDeg: number } {
+  const d = jd - 2451543.5; // days since 1999-12-31 0:00 UT
 
-  // Lunar day is ~24h 50m = 24.833h
-  const lunarDayHours = 24.833;
+  const N = rev(125.1228 - 0.0529538083 * d);
+  const i = 5.1454;
+  const w = rev(318.0634 + 0.1643573223 * d);
+  const e = 0.0549;
+  const a = 60.2666;
+  const M = rev(115.3654 + 13.0649929509 * d);
 
-  // Offset major windows based on moon phase
-  // New/Full moon: stronger at midnight/noon (rough approximation)
-  // Other phases: vary the offset
-  const phaseOffset = (daysInCycle / SYNODIC_MONTH) * 24;
+  const Ms = rev(356.047 + 0.9856002585 * d); // sun mean anomaly
+  const ws = 282.9404 + 4.70935e-5 * d;
+  const Ls = rev(Ms + ws); // sun mean longitude
+  const Lm = rev(N + w + M); // moon mean longitude
+  const Dm = rev(Lm - Ls); // mean elongation
+  const F = rev(Lm - N); // argument of latitude
 
-  // Major windows: ~2 per lunar day, roughly 12h apart
-  const majorWindow1Start = Math.round((phaseOffset + 6) % 24);
-  const majorWindow2Start = Math.round((phaseOffset + 18) % 24);
+  // Eccentric anomaly (two iterations, plenty for the moon's small e)
+  let E = M + (180 / Math.PI) * e * sind(M) * (1 + e * cosd(M));
+  E = E - (E - (180 / Math.PI) * e * sind(E) - M) / (1 - e * cosd(E));
 
-  // Minor windows: between majors
-  const minorWindow1Start = Math.round((phaseOffset + 0) % 24);
-  const minorWindow2Start = Math.round((phaseOffset + 12) % 24);
+  const xv = a * (cosd(E) - e);
+  const yv = a * Math.sqrt(1 - e * e) * sind(E);
+  const r = Math.hypot(xv, yv);
+  const v = rev(atan2d(yv, xv));
 
-  const windows: SolunarWindow[] = [
-    {
-      startHour: majorWindow1Start,
-      endHour: (majorWindow1Start + 1) % 24,
-      name: "major",
-      intensity: "high",
-    },
-    {
-      startHour: majorWindow2Start,
-      endHour: (majorWindow2Start + 1) % 24,
-      name: "major",
-      intensity: "high",
-    },
-    {
-      startHour: minorWindow1Start,
-      endHour: (minorWindow1Start + 1) % 24,
-      name: "minor",
-      intensity: "medium",
-    },
-    {
-      startHour: minorWindow2Start,
-      endHour: (minorWindow2Start + 1) % 24,
-      name: "minor",
-      intensity: "medium",
-    },
-  ];
+  const xh = r * (cosd(N) * cosd(v + w) - sind(N) * sind(v + w) * cosd(i));
+  const yh = r * (sind(N) * cosd(v + w) + cosd(N) * sind(v + w) * cosd(i));
+  const zh = r * (sind(v + w) * sind(i));
 
-  return windows;
+  let lon = rev(atan2d(yh, xh));
+  let lat = atan2d(zh, Math.hypot(xh, yh));
+
+  // Main perturbations (degrees)
+  lon +=
+    -1.274 * sind(M - 2 * Dm) +
+    0.658 * sind(2 * Dm) -
+    0.186 * sind(Ms) -
+    0.059 * sind(2 * M - 2 * Dm) -
+    0.057 * sind(M - 2 * Dm + Ms) +
+    0.053 * sind(M + 2 * Dm) +
+    0.046 * sind(2 * Dm - Ms) +
+    0.041 * sind(M - Ms) -
+    0.035 * sind(Dm) -
+    0.031 * sind(M + Ms) -
+    0.015 * sind(2 * F - 2 * Dm) +
+    0.011 * sind(M - 4 * Dm);
+  lat +=
+    -0.173 * sind(F - 2 * Dm) -
+    0.055 * sind(M - F - 2 * Dm) -
+    0.046 * sind(M + F - 2 * Dm) +
+    0.033 * sind(F + 2 * Dm) +
+    0.017 * sind(2 * M + F);
+  lon = rev(lon);
+
+  const ecl = 23.4393 - 3.563e-7 * d;
+  const xg = cosd(lon) * cosd(lat);
+  const yg = sind(lon) * cosd(lat);
+  const zg = sind(lat);
+  const xe = xg;
+  const ye = yg * cosd(ecl) - zg * sind(ecl);
+  const ze = yg * sind(ecl) + zg * cosd(ecl);
+
+  return { raDeg: rev(atan2d(ye, xe)), decDeg: atan2d(ze, Math.hypot(xe, ye)) };
 }
 
-// --- Solunar Activity Summary ---
+/** Greenwich mean sidereal time (degrees) at a Julian day. */
+function gmstDeg(jd: number): number {
+  return rev(280.46061837 + 360.98564736629 * (jd - 2451545.0));
+}
 
-/**
- * Generate a complete solunar activity summary for a day.
- */
+// --- Sydney time helpers ---
+
+function sydneyOffsetMinutes(d: Date): number {
+  const utc = new Date(d.toLocaleString("en-US", { timeZone: "UTC" }));
+  const syd = new Date(d.toLocaleString("en-US", { timeZone: "Australia/Sydney" }));
+  return Math.round((syd.getTime() - utc.getTime()) / 60000);
+}
+
+function sydneyMidnightUTCms(date: Date): number {
+  const dstr = new Intl.DateTimeFormat("en-CA", { timeZone: "Australia/Sydney" }).format(date);
+  const [Y, M, D] = dstr.split("-").map(Number);
+  const off = sydneyOffsetMinutes(date);
+  return Date.UTC(Y, M - 1, D) - off * 60000;
+}
+
+function msToSydneyClock(ms: number): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Australia/Sydney",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(ms));
+}
+
+function sydneyHourOf(ms: number): number {
+  return parseInt(
+    new Intl.DateTimeFormat("en-GB", { timeZone: "Australia/Sydney", hour: "2-digit", hour12: false }).format(
+      new Date(ms)
+    ),
+    10
+  );
+}
+
+// --- Moon event scan (transit, anti-transit, rise, set) ---
+
+interface MoonEvents {
+  upperTransit: number | null; // UT ms
+  lowerTransit: number | null;
+  rise: number | null;
+  set: number | null;
+}
+
+function moonEvents(date: Date): MoonEvents {
+  const start = sydneyMidnightUTCms(date);
+  const stepMin = 10;
+  const steps = Math.ceil((24 * 60) / stepMin); // one Sydney day
+
+  const t: number[] = [];
+  const alt: number[] = [];
+  for (let k = 0; k <= steps; k++) {
+    const ms = start + k * stepMin * 60000;
+    const jd = ms / 86400000 + 2440587.5;
+    const { raDeg, decDeg } = moonRaDec(jd);
+    const lstDeg = rev(gmstDeg(jd) + LON_OBS);
+    let ha = lstDeg - raDeg;
+    ha = ((ha + 180) % 360 + 360) % 360 - 180; // (-180, 180]
+    const a = asind(sind(LAT_OBS) * sind(decDeg) + cosd(LAT_OBS) * cosd(decDeg) * cosd(ha));
+    t.push(ms);
+    alt.push(a);
+  }
+
+  const ev: MoonEvents = { upperTransit: null, lowerTransit: null, rise: null, set: null };
+
+  const lerp = (i: number, target: number) => {
+    // altitude crossing between i-1 and i at value `target`
+    const frac = (target - alt[i - 1]) / (alt[i] - alt[i - 1]);
+    return t[i - 1] + frac * (t[i] - t[i - 1]);
+  };
+
+  for (let i = 1; i < alt.length; i++) {
+    if (ev.rise === null && alt[i - 1] < MOON_H0 && alt[i] >= MOON_H0) ev.rise = lerp(i, MOON_H0);
+    if (ev.set === null && alt[i - 1] >= MOON_H0 && alt[i] < MOON_H0) ev.set = lerp(i, MOON_H0);
+  }
+  for (let i = 1; i < alt.length - 1; i++) {
+    if (ev.upperTransit === null && alt[i] > alt[i - 1] && alt[i] >= alt[i + 1]) ev.upperTransit = t[i];
+    if (ev.lowerTransit === null && alt[i] < alt[i - 1] && alt[i] <= alt[i + 1]) ev.lowerTransit = t[i];
+  }
+  return ev;
+}
+
+// --- Windows ---
+
+function windowFrom(centerMs: number, halfMinutes: number, name: "major" | "minor", intensity: SolunarWindow["intensity"]): SolunarWindow {
+  return {
+    start: msToSydneyClock(centerMs - halfMinutes * 60000),
+    end: msToSydneyClock(centerMs + halfMinutes * 60000),
+    centerHour: sydneyHourOf(centerMs),
+    name,
+    intensity,
+  };
+}
+
 export function getSolunarActivity(date: Date = new Date()): SolunarActivity {
   const moonPhase = calculateMoonPhase(date);
-  const windows = calculateSolunarWindows(date);
+  const ev = moonEvents(date);
 
-  const majorWindows = windows.filter((w) => w.name === "major");
-  const minorWindows = windows.filter((w) => w.name === "minor");
+  // Strong feeding near new and full moon.
+  const strong = moonPhase.illumination >= 90 || moonPhase.illumination <= 10;
 
-  // Find the next upcoming window (simple heuristic: filter for windows that haven't passed)
-  const currentHour = date.getHours();
-  const upcomingMajor = majorWindows.find((w) => w.startHour >= currentHour);
-  const upcomingMinor = minorWindows.find((w) => w.startHour >= currentHour);
+  const todayMajorWindows: SolunarWindow[] = [];
+  if (ev.upperTransit !== null) todayMajorWindows.push(windowFrom(ev.upperTransit, 60, "major", strong ? "high" : "high"));
+  if (ev.lowerTransit !== null) todayMajorWindows.push(windowFrom(ev.lowerTransit, 60, "major", strong ? "high" : "medium"));
 
-  const nextMajor = upcomingMajor || majorWindows[0];
-  const nextMinor = upcomingMinor || minorWindows[0];
+  const todayMinorWindows: SolunarWindow[] = [];
+  if (ev.rise !== null) todayMinorWindows.push(windowFrom(ev.rise, 45, "minor", strong ? "high" : "medium"));
+  if (ev.set !== null) todayMinorWindows.push(windowFrom(ev.set, 45, "minor", strong ? "high" : "medium"));
 
-  // Best window is typically the nearest major window
-  const bestWindow: SolunarWindow | null = nextMajor
-    ? { ...nextMajor }
-    : nextMinor
-      ? { ...nextMinor }
-      : null;
+  todayMajorWindows.sort((a, b) => a.centerHour - b.centerHour);
+  todayMinorWindows.sort((a, b) => a.centerHour - b.centerHour);
 
-  // Generate a fish activity forecast based on moon phase
-  let fishActivityForecast = "";
-  if (moonPhase.phaseName === "full" || moonPhase.phaseName === "new") {
+  // Best upcoming window (nearest major after now, else first).
+  const nowHour = sydneyHourOf(Date.now());
+  const upcomingMajor = todayMajorWindows.find((w) => w.centerHour >= nowHour);
+  const bestWindow = upcomingMajor || todayMajorWindows[0] || todayMinorWindows[0] || null;
+
+  // Phase-based activity read (fixed the never-firing waning branch).
+  let fishActivityForecast: string;
+  const p = moonPhase.phaseName;
+  if (p === "full" || p === "new") {
     fishActivityForecast = "Highest activity expected. Spring tides amplify current and feeding.";
-  } else if (moonPhase.phaseName === "first-quarter" || moonPhase.phaseName === "last-quarter") {
+  } else if (p === "first-quarter" || p === "last-quarter") {
     fishActivityForecast = "Moderate activity. Neap tides reduce current strength.";
-  } else if (moonPhase.phaseName === "waxing") {
-    fishActivityForecast = "Building activity toward full moon. Kings increasingly active.";
-  } else if (moonPhase.phaseName === "waning") {
-    fishActivityForecast = "Declining activity after full moon. Still good around dawn/dusk.";
+  } else if (p.indexOf("waxing") === 0) {
+    fishActivityForecast = "Building activity toward the full moon. Kings increasingly active.";
   } else {
-    fishActivityForecast = "Check solunar windows for best feeding times.";
+    fishActivityForecast = "Easing off after the full moon, still worth it around the windows and dawn/dusk.";
   }
+
+  const explanation =
+    "Feeding windows come from the moon's actual position over Sydney. The two major windows are the roughly two hours around the moon's transit (directly overhead) and its opposite passage (underfoot); the two minor windows are the hour or so around moonrise and moonset. Fish tend to feed hardest through these windows, and hardest of all near the new and full moon when tides run strongest. Times are Sydney local and are a guide, not a guarantee.";
 
   return {
     moonPhase,
-    todayMajorWindows: majorWindows,
-    todayMinorWindows: minorWindows,
+    todayMajorWindows,
+    todayMinorWindows,
     bestWindow,
+    moonrise: ev.rise !== null ? msToSydneyClock(ev.rise) : null,
+    moonset: ev.set !== null ? msToSydneyClock(ev.set) : null,
+    transit: ev.upperTransit !== null ? msToSydneyClock(ev.upperTransit) : null,
     fishActivityForecast,
+    explanation,
   };
+}
+
+/** Combined windows (kept for compatibility). */
+export function calculateSolunarWindows(date: Date = new Date()): SolunarWindow[] {
+  const a = getSolunarActivity(date);
+  return [...a.todayMajorWindows, ...a.todayMinorWindows];
 }

@@ -72,8 +72,9 @@ interface MoonPhase {
 }
 
 interface SolunarWindow {
-  startHour: number;
-  endHour: number;
+  start: string;
+  end: string;
+  centerHour: number;
   name: string;
   intensity: string;
 }
@@ -83,7 +84,11 @@ interface SolunarActivity {
   todayMajorWindows: SolunarWindow[];
   todayMinorWindows: SolunarWindow[];
   bestWindow: SolunarWindow | null;
+  moonrise: string | null;
+  moonset: string | null;
+  transit: string | null;
   fishActivityForecast: string;
+  explanation: string;
 }
 
 interface SunTimes {
@@ -1854,26 +1859,32 @@ export default function Dashboard() {
                   </div>
                 </div>
               </div>
-              <p className="text-[11px] text-ocean-400 leading-relaxed">{solunar.fishActivityForecast}</p>
+              <p className="text-[11px] text-ocean-400 leading-relaxed mb-3">{solunar.fishActivityForecast}</p>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-ocean-500 pt-2 border-t border-white/[0.04]">
+                {solunar.moonrise && <span>Moonrise <span className="text-ocean-300">{solunar.moonrise}</span></span>}
+                {solunar.transit && <span>Overhead <span className="text-ocean-300">{solunar.transit}</span></span>}
+                {solunar.moonset && <span>Moonset <span className="text-ocean-300">{solunar.moonset}</span></span>}
+              </div>
             </div>
             <div className="glass-card p-5">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-ocean-400 mb-3">Feeding Windows</p>
               <div className="space-y-2">
                 {solunar.todayMajorWindows.map((w, i) => (
-                  <div key={`major-${i}`} className="flex justify-between items-center text-[10px]">
-                    <span className="text-ocean-400">Major: {String(w.startHour).padStart(2, "0")}:00–{String(w.endHour).padStart(2, "0")}:00</span>
-                    <span className="text-emerald-400 font-semibold">{w.intensity}</span>
+                  <div key={`major-${i}`} className="flex justify-between items-center text-[11px]">
+                    <span className="text-ocean-300">Major &middot; {w.start}&ndash;{w.end}</span>
+                    <span className="text-emerald-400 font-semibold capitalize">{w.intensity}</span>
                   </div>
                 ))}
                 {solunar.todayMinorWindows.map((w, i) => (
-                  <div key={`minor-${i}`} className="flex justify-between items-center text-[10px]">
-                    <span className="text-ocean-400">Minor: {String(w.startHour).padStart(2, "0")}:00–{String(w.endHour).padStart(2, "0")}:00</span>
-                    <span className="text-yellow-400 font-semibold">{w.intensity}</span>
+                  <div key={`minor-${i}`} className="flex justify-between items-center text-[11px]">
+                    <span className="text-ocean-400">Minor &middot; {w.start}&ndash;{w.end}</span>
+                    <span className="text-yellow-400 font-semibold capitalize">{w.intensity}</span>
                   </div>
                 ))}
               </div>
             </div>
           </div>
+          <p className="text-[10px] text-ocean-500 leading-relaxed mt-3 italic">{solunar.explanation}</p>
         </section>
       )}
 
