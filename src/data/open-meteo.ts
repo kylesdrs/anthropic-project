@@ -274,14 +274,19 @@ export async function fetchRecentPressure(): Promise<RecentPressure | null> {
       const currentTime = data.current?.time;
       if (!times || !vals || times.length === 0 || !currentTime) return null;
 
-      // Match the current hour into the hourly series (same local ISO format),
-      // then step back three hours.
-      const idx = times.indexOf(currentTime);
-      if (idx < 0) return null;
+      // current.time carries minutes (e.g. "2026-08-31T06:56") but the hourly
+      // timestamps sit on the hour, so an exact match fails. Both are Sydney
+      // local ISO strings, which compare chronologically, so take the most
+      // recent hourly entry at or before now, then step back three hours.
+      let idx = -1;
+      for (let i = 0; i < times.length; i++) {
+        if (times[i] <= currentTime) idx = i;
+        else break;
+      }
+      if (idx < 3) return null;
 
-      const currentHpa = data.current?.pressure_msl ?? vals[idx] ?? null;
-      const priorIdx = idx - 3;
-      const threeHoursAgoHpa = priorIdx >= 0 ? vals[priorIdx] ?? null : null;
+      const currentHpa = vals[idx] ?? data.current?.pressure_msl ?? null;
+      const threeHoursAgoHpa = vals[idx - 3] ?? null;
 
       const changeHpa =
         currentHpa != null && threeHoursAgoHpa != null
