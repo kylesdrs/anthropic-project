@@ -6,8 +6,9 @@
  * Falling pressure often signals deteriorating conditions.
  * Steady pressure suggests stable conditions.
  *
- * For this MVP, we use a simple heuristic since we don't have historical
- * pressure data in storage. In production, you'd track hourly values.
+ * When a real recent change is available (the 3-hour delta from Open-Meteo's
+ * hourly pressure), we use it directly. If that data is missing we fall back
+ * to a seasonal-average heuristic so the card still renders.
  */
 
 // --- Types ---
@@ -30,7 +31,40 @@ export interface PressureTrend {
  * In a production system, you'd store hourly pressure values and compute
  * the actual trend over the past 3-6 hours.
  */
-export function calculatePressureTrend(currentPressure: number): PressureTrend {
+export function calculatePressureTrend(
+  currentPressure: number,
+  changeHpa?: number | null
+): PressureTrend {
+  // Preferred path: a real measured change over the last three hours.
+  if (changeHpa != null) {
+    let trend: PressureTrend["trend"];
+    if (changeHpa > 1) trend = "rising";
+    else if (changeHpa < -1) trend = "falling";
+    else trend = "steady";
+
+    const mag = Math.abs(changeHpa).toFixed(1);
+    let interpretation: string;
+    if (trend === "rising") {
+      interpretation = `Pressure rising, up ${mag} hPa over the last three hours, now ${currentPressure.toFixed(1)} hPa. Conditions settling.`;
+    } else if (trend === "falling") {
+      interpretation = `Pressure falling, down ${mag} hPa over the last three hours, now ${currentPressure.toFixed(1)} hPa. Watch for deteriorating conditions.`;
+    } else {
+      interpretation = `Pressure steady, ${changeHpa >= 0 ? "up" : "down"} ${mag} hPa over the last three hours, now ${currentPressure.toFixed(1)} hPa. Stable.`;
+    }
+
+    let fishActivityImplication: string;
+    if (trend === "rising") {
+      fishActivityImplication = "Rising pressure means stable weather and normal to good feeding, especially mid-day.";
+    } else if (trend === "falling") {
+      fishActivityImplication = "Falling pressure often brings a strong bite just before the weather hits.";
+    } else {
+      fishActivityImplication = "Steady pressure means normal feeding. Solunar and tide timing matter more.";
+    }
+
+    return { trend, change: changeHpa, interpretation, fishActivityImplication };
+  }
+
+  // Fallback: estimate from a seasonal average when no recent change is available.
   // Typical Sydney pressure range: 1008-1025 hPa
   // Standard/normal is ~1013 hPa
   // High pressure (>1018): generally good, stable

@@ -27,7 +27,7 @@ import {
   calculateKingfishConditions,
   type KingfishConditions,
 } from "./kingfish";
-import { fetchOpenMeteo5Day } from "../data/open-meteo";
+import { fetchOpenMeteo5Day, fetchRecentPressure } from "../data/open-meteo";
 import { fetchMarineConditions, type MarineConditions } from "../data/open-meteo-marine";
 import { generate5DayOutlook, type FiveDayOutlook, type OutlookDay } from "./outlook";
 import {
@@ -107,12 +107,13 @@ export async function generateBriefing(options?: {
     : undefined;
 
   // Fetch all data in parallel
-  const [weather, swell, sharkActivity, omData, marineData] = await Promise.all([
+  const [weather, swell, sharkActivity, omData, marineData, recentPressure] = await Promise.all([
     fetchWeatherData(),
     fetchSwellData(),
     fetchSharkActivity(),
     fetchOpenMeteo5Day(),
     fetchMarineConditions(),
+    fetchRecentPressure(),
   ]);
 
   // Track which data sources are available
@@ -264,7 +265,7 @@ export async function generateBriefing(options?: {
   // Calculate barometric pressure trend
   let pressureTrend: PressureTrend | null = null;
   if (weather?.observation.pressure) {
-    pressureTrend = calculatePressureTrend(weather.observation.pressure);
+    pressureTrend = calculatePressureTrend(weather.observation.pressure, recentPressure?.changeHpa ?? null);
   }
 
   // Assess bluebottle risk

@@ -139,13 +139,13 @@ function scoreCurrent(
 
   if (knots >= 0.5 && knots <= 1.5) {
     const tideNote = isRising ? " on incoming tide" : "";
-    return { name: "Current", score: 20, detail: `~${knots}kt${tideNote} — bait concentrating against structure` };
+    return { name: "Current", score: 20, detail: `~${knots}kt current${tideNote} — bait concentrating against structure` };
   }
   if (knots > 1.5 && knots <= 2) {
-    return { name: "Current", score: 12, detail: `~${knots}kt — strong but workable` };
+    return { name: "Current", score: 12, detail: `~${knots}kt current — strong but workable` };
   }
   if (knots > 2) {
-    return { name: "Current", score: -5, detail: `~${knots}kt — too strong for safe diving` };
+    return { name: "Current", score: -5, detail: `~${knots}kt current — too strong for safe diving` };
   }
   if (knots < 0.3) {
     return { name: "Current", score: -15, detail: "Slack water — bait dispersed, kings absent" };
@@ -189,18 +189,18 @@ function scoreWind(
 
 function scoreVisibility(vis: number): KingfishFactorScore {
   if (vis < 2) {
-    return { name: "Visibility", score: -25, detail: `${vis}m — kings cannot hunt, dangerous to dive` };
+    return { name: "Visibility", score: -25, detail: `${vis}m vis — kings cannot hunt, dangerous to dive` };
   }
   if (vis < 4) {
-    return { name: "Visibility", score: -10, detail: `${vis}m — marginal, kings likely absent` };
+    return { name: "Visibility", score: -10, detail: `${vis}m vis — marginal, kings likely absent` };
   }
   if (vis < 6) {
-    return { name: "Visibility", score: 0, detail: `${vis}m — neutral, kings may be present near structure` };
+    return { name: "Visibility", score: 0, detail: `${vis}m vis — neutral, kings may be present near structure` };
   }
   if (vis <= 10) {
-    return { name: "Visibility", score: 8, detail: `${vis}m — good conditions` };
+    return { name: "Visibility", score: 8, detail: `${vis}m vis — good conditions` };
   }
-  return { name: "Visibility", score: 15, detail: `${vis}m — EAC conditions, excellent for kings` };
+  return { name: "Visibility", score: 15, detail: `${vis}m vis — EAC conditions, excellent for kings` };
 }
 
 // --- Factor 6: Season & Spawn Timing ---

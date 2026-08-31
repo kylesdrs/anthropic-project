@@ -237,3 +237,61 @@ export async function fetchOpenMeteo5Day(): Promise<OpenMeteoDay[] | null> {
     }
   });
 }
+
+// --- Recent pressure (for a real barometric trend) ---
+
+// Mean-sea-level pressure for the current hour plus the past day, so we can
+// compute an actual 3-hour change instead of guessing from a seasonal average.
+const PRESSURE_URL =
+  `https://api.open-meteo.com/v1/forecast?latitude=${LATITUDE}&longitude=${LONGITUDE}` +
+  `&current=pressure_msl&hourly=pressure_msl&past_days=1&forecast_days=1&timezone=Australia%2FSydney`;
+
+export interface RecentPressure {
+  currentHpa: number | null;
+  threeHoursAgoHpa: number | null;
+  /** current minus the reading three hours earlier (positive = rising) */
+  changeHpa: number | null;
+}
+
+/**
+ * Fetch mean-sea-level pressure now and three hours ago from Open-Meteo.
+ * Keyless. Returns null if the data is unavailable so the caller can fall
+ * back to its own estimate. Cached for one hour.
+ */
+export async function fetchRecentPressure(): Promise<RecentPressure | null> {
+  return cachedFetch("open-meteo-pressure", TTL.ONE_HOUR, async () => {
+    try {
+      const res = await fetch(PRESSURE_URL, { cache: "no-store" });
+      if (!res.ok) return null;
+
+      const data = (await res.json()) as {
+        current?: { time?: string; pressure_msl?: number | null };
+        hourly?: { time?: string[]; pressure_msl?: (number | null)[] };
+      };
+
+      const times = data.hourly?.time;
+      const vals = data.hourly?.pressure_msl;
+      const currentTime = data.current?.time;
+      if (!times || !vals || times.length === 0 || !currentTime) return null;
+
+      // Match the current hour into the hourly series (same local ISO format),
+      // then step back three hours.
+      const idx = times.indexOf(currentTime);
+      if (idx < 0) return null;
+
+      const currentHpa = data.current?.pressure_msl ?? vals[idx] ?? null;
+      const priorIdx = idx - 3;
+      const threeHoursAgoHpa = priorIdx >= 0 ? vals[priorIdx] ?? null : null;
+
+      const changeHpa =
+        currentHpa != null && threeHoursAgoHpa != null
+          ? Math.round((currentHpa - threeHoursAgoHpa) * 10) / 10
+          : null;
+
+      return { currentHpa, threeHoursAgoHpa, changeHpa };
+    } catch (err) {
+      console.error("Open-Meteo pressure fetch failed:", err);
+      return null;
+    }
+  });
+}

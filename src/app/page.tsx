@@ -919,6 +919,12 @@ function KingfishCard({ kingfish }: { kingfish: KingfishConditionsData }) {
       {expanded && (
         <div className="mt-3 pt-3 border-t border-white/[0.06] space-y-3 animate-fade-in">
           <p className="text-[10px] font-semibold text-ocean-400 uppercase tracking-wider">Factor Breakdown</p>
+          <p className="text-[10px] text-ocean-500 leading-relaxed">
+            What the numbers mean: <span className="text-ocean-300">kt</span> is ocean current speed in knots (about 0.5 to 1.5kt is the sweet spot, it stacks bait against the reef).
+            The metres figure on Visibility is how far you can see underwater (under 4m is marginal, over 6m is good).
+            <span className="text-ocean-300"> °C</span> is water temperature (21 to 23 is best for kings).
+            Each factor adds or subtracts points from a 35 baseline to give the score out of 100.
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
             {overall.factors.map((f) => (
               <div key={f.name} className="flex items-center justify-between rounded-lg bg-ocean-950/40 border border-white/[0.03] px-2.5 py-2">

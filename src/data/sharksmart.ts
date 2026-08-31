@@ -240,27 +240,41 @@ const ALERTS_DIR = path.join(process.cwd(), "data");
 const ALERTS_FILE = path.join(ALERTS_DIR, "shark_alerts.json");
 
 function ensureDataDir() {
-  if (!existsSync(ALERTS_DIR)) {
-    mkdirSync(ALERTS_DIR, { recursive: true });
+  try {
+    if (!existsSync(ALERTS_DIR)) {
+      mkdirSync(ALERTS_DIR, { recursive: true });
+    }
+  } catch {
+    // Read-only filesystem (e.g. Vercel serverless) — ignore, callers fall back to memory.
+  }
+}
+
+/** Best-effort write. Never throws — on a read-only filesystem it's a no-op. */
+function tryWrite(alerts: SharkAlert[]): void {
+  try {
+    ensureDataDir();
+    writeFileSync(ALERTS_FILE, JSON.stringify(alerts, null, 2), "utf-8");
+  } catch {
+    // Read-only filesystem — skip persistence, not fatal.
   }
 }
 
 function loadAlerts(): SharkAlert[] {
-  if (!existsSync(ALERTS_FILE)) {
-    // First run: seed with realistic data
-    const seed = generateSeedAlerts();
-    ensureDataDir();
-    writeFileSync(ALERTS_FILE, JSON.stringify(seed, null, 2), "utf-8");
-    return seed;
-  }
-
   try {
+    if (!existsSync(ALERTS_FILE)) {
+      // First run: seed with realistic data. Persisting is best-effort;
+      // on a read-only filesystem we just return the seed in memory.
+      const seed = generateSeedAlerts();
+      tryWrite(seed);
+      return seed;
+    }
+
     const raw = readFileSync(ALERTS_FILE, "utf-8");
     const alerts = JSON.parse(raw) as SharkAlert[];
     if (alerts.length === 0) {
       // Empty file — reseed
       const seed = generateSeedAlerts();
-      writeFileSync(ALERTS_FILE, JSON.stringify(seed, null, 2), "utf-8");
+      tryWrite(seed);
       return seed;
     }
     return alerts;
@@ -270,8 +284,7 @@ function loadAlerts(): SharkAlert[] {
 }
 
 function saveAlerts(alerts: SharkAlert[]): void {
-  ensureDataDir();
-  writeFileSync(ALERTS_FILE, JSON.stringify(alerts, null, 2), "utf-8");
+  tryWrite(alerts);
 }
 
 // --- Live fetch (best-effort) ---
